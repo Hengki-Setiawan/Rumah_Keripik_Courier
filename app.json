@@ -16,6 +16,8 @@
     },
     "android": {
       "package": "com.hengkisetiawan.rumahkeripikcourier",
+      "versionCode": 1,
+      "versionName": "1.0.0",
       "adaptiveIcon": {
         "backgroundColor": "#FAF6EF",
         "foregroundImage": "./assets/adaptive-icon.png"
@@ -26,7 +28,8 @@
         "ACCESS_BACKGROUND_LOCATION",
         "CAMERA",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "FOREGROUND_SERVICE_LOCATION",
+        "FOREGROUND_SERVICE_DATA_SYNC"
       ]
     },
     "web": {
