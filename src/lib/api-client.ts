@@ -21,17 +21,28 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error('NETWORK_ERROR');
+  }
 
   if (res.status === 401) {
     await removeToken();
     throw new Error('UNAUTHORIZED');
   }
 
-  const data = await res.json();
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error('NETWORK_ERROR');
+  }
+
   if (!data.ok) {
     throw new Error(data.error || 'Request failed');
   }
