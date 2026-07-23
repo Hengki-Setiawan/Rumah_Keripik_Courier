@@ -66,8 +66,8 @@ export default function DashboardScreen() {
     try {
       const data = await getTodayDeliveries();
       setDeliveries(data.deliveries);
-    } catch (error: any) {
-      if (error.message === 'NO_TOKEN' || error.message === 'UNAUTHORIZED') {
+    } catch (error: unknown) {
+      if (error instanceof Error && (error.message === 'NO_TOKEN' || error.message === 'UNAUTHORIZED')) {
         router.replace('/login');
       }
     }

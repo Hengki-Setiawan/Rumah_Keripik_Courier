@@ -41,7 +41,7 @@ async function request<T>(
     throw new Error('UNAUTHORIZED');
   }
 
-  let data: any;
+  let data: Record<string, unknown>;
   try {
     data = await res.json();
   } catch {
@@ -49,7 +49,7 @@ async function request<T>(
   }
 
   if (!data.ok) {
-    throw new Error(data.error || 'Request failed');
+    throw new Error(String(data.error || 'Request failed'));
   }
 
   return data as T;

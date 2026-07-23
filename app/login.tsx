@@ -31,8 +31,8 @@ export default function LoginScreen() {
       }
 
       router.replace('/');
-    } catch (error: any) {
-      Alert.alert('Login Gagal', error.message || 'Cek kembali phone dan PIN');
+    } catch (error: unknown) {
+      Alert.alert('Login Gagal', error instanceof Error ? error.message : 'Cek kembali phone dan PIN');
     }
     setLoading(false);
   }
