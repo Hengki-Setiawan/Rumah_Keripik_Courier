@@ -109,3 +109,10 @@ export async function getTodayRoute() {
     '/api/courier/route/today'
   );
 }
+
+export async function respondToOffer(assignmentId: number, action: 'accept' | 'reject') {
+  return request<{ ok: boolean; action: string }>(
+    '/api/courier/offers/respond',
+    { method: 'POST', body: JSON.stringify({ assignmentId, action }) }
+  );
+}

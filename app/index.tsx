@@ -3,7 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, 
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius } from '../src/theme';
-import { getTodayDeliveries, getProfile } from '../src/lib/api-client';
+import { getTodayDeliveries, getProfile, respondToOffer } from '../src/lib/api-client';
 import { getCourierData, removeToken } from '../src/lib/storage';
 import { startLocationTracking, stopLocationTracking } from '../src/lib/location';
 import { registerForPushNotifications, setupNotificationListener } from '../src/lib/notifications';
@@ -16,6 +16,7 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tracking, setTracking] = useState(false);
+  const [respondedIds, setRespondedIds] = useState<number[]>([]);
 
   useEffect(() => {
     initSession();
@@ -100,9 +101,37 @@ export default function DashboardScreen() {
     ]);
   }
 
-  const pendingDeliveries = deliveries.filter((d) => d.status === 'Siap_Dikirim' || d.status === 'Dalam_Pengiriman');
+  const offers = deliveries.filter((d) => d.status === 'Siap_Dikirim' && !respondedIds.includes(d.id));
+  const pendingDeliveries = deliveries.filter((d) => d.status === 'Dalam_Pengiriman');
   const completedDeliveries = deliveries.filter((d) => d.status === 'Terkirim');
   const failedDeliveries = deliveries.filter((d) => d.status === 'Gagal');
+  const [timers, setTimers] = useState<Record<number, number>>({});
+  const [responding, setResponding] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    if (offers.length === 0) { setTimers({}); return; }
+    const interval = setInterval(() => {
+      for (const o of offers) {
+        const createdAt = o.created_at || new Date().toISOString();
+        const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
+        const remaining = Math.max(0, 45 - elapsed);
+        setTimers((prev) => ({ ...prev, [o.id]: remaining }));
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [offers.length]);
+
+  async function handleRespond(id: number, action: 'accept' | 'reject') {
+    setResponding((prev) => ({ ...prev, [id]: true }));
+    try {
+      await respondToOffer(id, action);
+      setRespondedIds((prev) => [...prev, id]);
+      loadDeliveries();
+    } catch {
+      Alert.alert('Gagal', 'Coba lagi');
+    }
+    setResponding((prev) => ({ ...prev, [id]: false }));
+  }
 
   function getStatusLabel(status: string) {
     switch (status) {
@@ -169,8 +198,47 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
+      {offers.length > 0 && (
+        <View style={{ paddingHorizontal: spacing.xl, marginBottom: spacing.md }}>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: colors.accent, marginBottom: 8 }}>
+            📦 Tawaran Baru ({offers.length})
+          </Text>
+          {offers.map((offer) => {
+            const remaining = timers[offer.id] ?? 45;
+            return (
+              <View key={offer.id} style={[styles.card, { borderColor: '#f59e0b', borderWidth: 2, backgroundColor: '#fffbeb' }]}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.orderCode}>{offer.kode_pesanan}</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: remaining < 10 ? '#dc2626' : '#c55a2b' }}>
+                    {remaining}s
+                  </Text>
+                </View>
+                <Text style={styles.customerName}>{offer.customer_name}</Text>
+                <Text style={styles.address} numberOfLines={2}>{offer.address}</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#16a34a', borderRadius: 8, padding: 10, alignItems: 'center' }}
+                    onPress={() => handleRespond(offer.id, 'accept')}
+                    disabled={responding[offer.id]}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Terima</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#dc2626', borderRadius: 8, padding: 10, alignItems: 'center' }}
+                    onPress={() => handleRespond(offer.id, 'reject')}
+                    disabled={responding[offer.id]}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Tolak</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       <FlatList
-        data={deliveries}
+        data={deliveries.filter((d) => d.status !== 'Siap_Dikirim')}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
         refreshControl={

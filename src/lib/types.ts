@@ -26,6 +26,7 @@ export interface CourierDeliveryDto {
   distance_km: string | null;
   notes: string | null;
   route_order: number | null;
+  created_at?: string;
   items: CourierDeliveryItem[];
 }
 
