@@ -1,158 +1,63 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Linking, Platform, FlatList, RefreshControl } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
-import * as Location from 'expo-location';
-import { colors, spacing, borderRadius } from '../../src/theme';
+import { Stack, router } from 'expo-router';
+import { spacing } from '../../src/theme';
+const PRIMARY_COLOR = '#c55a2b';
 import { getToken } from '../../src/lib/storage';
+import * as Location from 'expo-location';
 
-const API_BASE = 'https://rumah-keripik.vercel.app';
+const SOS_CONTACTS = process.env.EXPO_PUBLIC_SOS_PHONE || '08123456789';
 
 export default function SosScreen() {
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [events, setEvents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchHistory = useCallback(async () => {
-    try {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}/api/courier/sos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setEvents(data.events || []);
-      }
-    } catch {} finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   async function handleSos() {
-    Alert.alert('Kirim Sinyal Darurat?', 'Lokasi Anda akan dikirim ke admin untuk tindakan lanjutan.', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Kirim Darurat', style: 'destructive', onPress: sendSos },
-    ]);
-  }
-
-  async function sendSos() {
     setSending(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Izin Lokasi', 'Aktifkan izin lokasi untuk mengirim sinyal darurat');
-        setSending(false);
-        return;
+      let location = null;
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({});
+        location = { lat: loc.coords.latitude, lng: loc.coords.longitude };
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const token = await getToken();
       await fetch('https://rumah-keripik.vercel.app/api/courier/sos', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat: loc.coords.latitude, lng: loc.coords.longitude }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
+        body: JSON.stringify({ location, timestamp: new Date().toISOString() }),
       });
-      setSent(true);
-      Alert.alert('Sinyal Terkirim', 'Admin sudah diberitahu. Tim akan menghubungi Anda segera.');
-    } catch (err) {
-      Alert.alert('Gagal', 'Tidak dapat mengirim sinyal darurat. Hubungi admin langsung.');
-    } finally {
-      setSending(false);
-    }
-  }
-
-  function callEmergency() {
-    Linking.openURL('tel:112');
+      Alert.alert('SOS Terkirim', 'Bantuan sudah dalam perjalanan. Admin akan menghubungi kamu segera.');
+      router.back();
+    } catch {
+      Alert.alert('Gagal', 'Tidak dapat mengirim sinyal SOS. Coba hubungi admin langsung di ' + SOS_CONTACTS);
+    } finally { setSending(false); }
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: 'Darurat', headerShown: true, headerStyle: { backgroundColor: '#faf6ef' }, headerTintColor: '#333' }} />
+      <Stack.Screen options={{ title: 'SOS Darurat', headerShown: true }} />
       <View style={styles.content}>
-        {sent ? (
-          <View style={styles.sentContainer}>
-            <Text style={styles.sentIcon}>✓</Text>
-            <Text style={styles.sentTitle}>Sinyal Darurat Terkirim</Text>
-            <Text style={styles.sentDesc}>Admin sudah mendapatkan lokasi Anda dan akan menghubungi Anda sesegera mungkin.</Text>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.instruction}>Jika Anda dalam situasi darurat atau tidak aman, tekan tombol di bawah untuk mengirim sinyal ke admin.</Text>
-            <TouchableOpacity style={styles.sosButton} onPress={handleSos} disabled={sending}>
-              {sending ? (
-                <ActivityIndicator size="large" color="#fff" />
-              ) : (
-                <Text style={styles.sosText}>SOS</Text>
-              )}
-            </TouchableOpacity>
-            <Text style={styles.sosHint}>Lokasi Anda akan dikirim ke admin</Text>
-
-            <TouchableOpacity style={styles.callButton} onPress={callEmergency}>
-              <Text style={styles.callText}>Hubungi Darurat (112)</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        <View style={styles.historySection}>
-          <Text style={styles.historyTitle}>Riwayat SOS</Text>
-          {loading ? (
-            <ActivityIndicator size="small" color="#999" style={{ marginTop: 8 }} />
-          ) : events.length === 0 ? (
-            <Text style={styles.emptyText}>Belum ada riwayat SOS</Text>
-          ) : (
-            <FlatList
-              data={events}
-              keyExtractor={(item) => String(item.id)}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <View style={styles.eventCard}>
-                  <View style={[styles.eventIcon, { backgroundColor: item.status === 'resolved' ? '#e8f5e9' : '#fbe9e7' }]}>
-                    <View style={[styles.eventDotIcon, { backgroundColor: item.status === 'resolved' ? '#2e7d32' : '#d32f2f' }]} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.eventStatus}>{item.status === 'resolved' ? 'Terselesaikan' : 'Aktif'}</Text>
-                    <Text style={styles.eventDate}>{new Date(item.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
-                    {item.status === 'resolved' && item.note && (
-                      <Text style={styles.eventNote}>Catatan: {item.note}</Text>
-                    )}
-                  </View>
-                </View>
-              )}
-            />
-          )}
-        </View>
+        <Text style={styles.title}>SOS Darurat</Text>
+        <Text style={styles.subtitle}>Kirim sinyal bantuan ke admin</Text>
+        <TouchableOpacity style={[styles.sosButton, sending && styles.disabled]} onPress={handleSos} disabled={sending} activeOpacity={0.7}>
+          <Text style={styles.sosText}>SOS</Text>
+        </TouchableOpacity>
+        {sending && <Text style={styles.sending}>Mengirim sinyal...</Text>}
+        <Text style={styles.info}>Lokasi kamu akan dikirim ke admin untuk tindakan cepat.</Text>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#faf6ef' },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  instruction: { fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 32, lineHeight: 22 },
-  sosButton: {
-    width: 160, height: 160, borderRadius: 80, backgroundColor: '#d32f2f',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#d32f2f', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
-    elevation: 8,
-  },
-  sosText: { color: '#fff', fontSize: 42, fontWeight: '800' },
-  sosHint: { fontSize: 12, color: '#999', marginTop: 12 },
-  callButton: { marginTop: 40, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12, borderWidth: 1, borderColor: '#d32f2f' },
-  callText: { color: '#d32f2f', fontSize: 16, fontWeight: '600' },
-  sentContainer: { alignItems: 'center' },
-  sentIcon: { fontSize: 48, color: '#2e7d32', marginBottom: 16 },
-  sentTitle: { fontSize: 20, fontWeight: '700', color: '#333', marginBottom: 8 },
-  sentDesc: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20 },
-  historySection: { width: '100%', marginTop: 32 },
-  historyTitle: { fontSize: 15, fontWeight: '700', color: '#333', marginBottom: 8 },
-  emptyText: { fontSize: 12, color: '#999', textAlign: 'center', marginTop: 8 },
-  eventCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: '#e5dcc9' },
-  eventIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  eventDotIcon: { width: 12, height: 12, borderRadius: 6 },
-  eventStatus: { fontSize: 13, fontWeight: '600', color: '#333' },
-  eventDate: { fontSize: 11, color: '#999', marginTop: 1 },
-  eventNote: { fontSize: 11, color: '#666', marginTop: 2 },
+  container: { flex: 1 },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
+  title: { fontSize: 28, fontWeight: 'bold', marginBottom: spacing.sm },
+  subtitle: { fontSize: 16, color: '#666', marginBottom: spacing.xl },
+  sosButton: { width: 160, height: 160, borderRadius: 80, backgroundColor: '#dc2626', justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xl, elevation: 8, shadowColor: '#dc2626', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
+  sosText: { color: '#fff', fontSize: 36, fontWeight: 'bold' },
+  disabled: { opacity: 0.6 },
+  sending: { fontSize: 14, color: PRIMARY_COLOR, marginBottom: spacing.md },
+  info: { fontSize: 14, color: '#888', textAlign: 'center', paddingHorizontal: spacing.xl },
 });
