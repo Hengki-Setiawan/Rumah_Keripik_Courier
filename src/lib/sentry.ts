@@ -1,14 +1,20 @@
-import * as Sentry from '@sentry/react-native';
-import { isRunningInExpoGo } from 'expo';
-
 export function initSentry() {
-  if (isRunningInExpoGo()) return;
-  Sentry.init({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || '',
-    enableNativeCrashHandling: true,
-    tracesSampleRate: 0.2,
-    environment: process.env.EXPO_PUBLIC_APP_ENV || 'production',
-  });
+  const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+  if (!dsn) return;
+  try {
+    const Sentry = require('@sentry/react-native');
+    Sentry.init({
+      dsn,
+      enableNativeCrashHandling: true,
+      tracesSampleRate: 0.2,
+      environment: process.env.EXPO_PUBLIC_APP_ENV || 'production',
+    });
+  } catch {
+    // Sentry optional fallback
+  }
 }
 
-export { Sentry };
+export const Sentry = {
+  captureException: (err: any) => console.error('[Sentry Fallback]', err),
+  captureMessage: (msg: string) => console.log('[Sentry Fallback]', msg),
+};
