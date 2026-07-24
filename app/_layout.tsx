@@ -33,6 +33,8 @@ export default function RootLayout() {
           <Stack.Screen name="delivery/[id]/success" />
           <Stack.Screen name="delivery/[id]/fail" />
           <Stack.Screen name="history" />
+          <Stack.Screen name="earnings/index" />
+          <Stack.Screen name="sos/index" />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

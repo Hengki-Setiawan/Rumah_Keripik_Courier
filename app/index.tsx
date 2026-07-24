@@ -160,6 +160,15 @@ export default function DashboardScreen() {
         </Text>
       </TouchableOpacity>
 
+      <View style={styles.navRow}>
+        <TouchableOpacity style={styles.navBtn} onPress={() => router.push('/earnings')}>
+          <Text style={styles.navBtnText}>💰 Pendapatan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navBtnSos} onPress={() => router.push('/sos')}>
+          <Text style={styles.navBtnTextSos}>🆘 Darurat</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={deliveries}
         keyExtractor={(item) => String(item.id)}
@@ -319,6 +328,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
   },
+  navRow: {
+    flexDirection: 'row', paddingHorizontal: spacing.md, marginBottom: spacing.sm, gap: 8,
+  },
+  navBtn: {
+    flex: 1, backgroundColor: '#fff', borderRadius: borderRadius.md, padding: spacing.md,
+    alignItems: 'center', borderWidth: 1, borderColor: colors.border,
+  },
+  navBtnSos: {
+    flex: 1, backgroundColor: '#fef2f2', borderRadius: borderRadius.md, padding: spacing.md,
+    alignItems: 'center', borderWidth: 1, borderColor: '#fecaca',
+  },
+  navBtnText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  navBtnTextSos: { fontSize: 14, fontWeight: '600', color: '#991b1b' },
   empty: {
     textAlign: 'center',
     color: colors.textMuted,
