@@ -17,6 +17,7 @@ export interface QueuedRequest {
   createdAt: string;
   attempts: number;
   lastError?: string;
+  needsReview?: boolean;
 }
 
 async function getQueue(): Promise<QueuedRequest[]> {
@@ -26,6 +27,18 @@ async function getQueue(): Promise<QueuedRequest[]> {
 
 async function saveQueue(queue: QueuedRequest[]) {
   await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+}
+
+function generateId(): string {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function computeBackoff(attempts: number): number {
+  const base = 1000;
+  const maxDelay = 30000;
+  const exponential = Math.min(base * Math.pow(2, attempts), maxDelay);
+  const jitter = exponential * 0.1 * Math.random();
+  return Math.floor(exponential + jitter);
 }
 
 export async function enqueueRequest(
@@ -38,7 +51,7 @@ export async function enqueueRequest(
 ) {
   const queue = await getQueue();
   queue.push({
-    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: generateId(),
     type,
     path,
     method,
@@ -70,6 +83,11 @@ export async function processQueue() {
   const failed: QueuedRequest[] = [];
 
   for (const req of sorted) {
+    if (req.needsReview) {
+      failed.push(req);
+      continue;
+    }
+
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (req.token) headers['Authorization'] = `Bearer ${req.token}`;
@@ -89,15 +107,19 @@ export async function processQueue() {
 
       req.attempts++;
       req.lastError = `HTTP ${res.status}`;
-      if (req.attempts < 5) {
-        failed.push(req);
+      if (req.attempts >= 5) {
+        req.needsReview = true;
       }
+      failed.push(req);
     } catch (err) {
       req.attempts++;
       req.lastError = String(err);
-      if (req.attempts < 5) {
-        failed.push(req);
+      if (req.attempts >= 5) {
+        req.needsReview = true;
       }
+      const delayMs = computeBackoff(req.attempts);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      failed.push(req);
     }
   }
 
@@ -105,7 +127,18 @@ export async function processQueue() {
   await saveQueue(remaining);
 }
 
-export async function getQueueStatus(): Promise<{ count: number; highPriority: number }> {
+export async function getQueueStatus(): Promise<{ count: number; highPriority: number; needsReview: number }> {
   const queue = await getQueue();
-  return { count: queue.length, highPriority: queue.filter((q) => q.priority === 'high').length };
+  return {
+    count: queue.length,
+    highPriority: queue.filter((q) => q.priority === 'high').length,
+    needsReview: queue.filter((q) => q.needsReview).length,
+  };
+}
+
+export async function clearStaleRequests(maxAgeMs = 86400000) {
+  const queue = await getQueue();
+  const now = Date.now();
+  const filtered = queue.filter((req) => now - new Date(req.createdAt).getTime() < maxAgeMs);
+  await saveQueue(filtered);
 }
