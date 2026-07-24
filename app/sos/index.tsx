@@ -1,14 +1,35 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Linking, Platform } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Linking, Platform, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import * as Location from 'expo-location';
 import { colors, spacing, borderRadius } from '../../src/theme';
 import { getToken } from '../../src/lib/storage';
 
+const API_BASE = 'https://rumah-keripik.vercel.app';
+
 export default function SosScreen() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/api/courier/sos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(data.events || []);
+      }
+    } catch {} finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   async function handleSos() {
     Alert.alert('Kirim Sinyal Darurat?', 'Lokasi Anda akan dikirim ke admin untuk tindakan lanjutan.', [
@@ -73,6 +94,35 @@ export default function SosScreen() {
             </TouchableOpacity>
           </>
         )}
+
+        <View style={styles.historySection}>
+          <Text style={styles.historyTitle}>Riwayat SOS</Text>
+          {loading ? (
+            <ActivityIndicator size="small" color="#999" style={{ marginTop: 8 }} />
+          ) : events.length === 0 ? (
+            <Text style={styles.emptyText}>Belum ada riwayat SOS</Text>
+          ) : (
+            <FlatList
+              data={events}
+              keyExtractor={(item) => String(item.id)}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.eventCard}>
+                  <View style={[styles.eventIcon, { backgroundColor: item.status === 'resolved' ? '#e8f5e9' : '#fbe9e7' }]}>
+                    <View style={[styles.eventDotIcon, { backgroundColor: item.status === 'resolved' ? '#2e7d32' : '#d32f2f' }]} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.eventStatus}>{item.status === 'resolved' ? 'Terselesaikan' : 'Aktif'}</Text>
+                    <Text style={styles.eventDate}>{new Date(item.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
+                    {item.status === 'resolved' && item.note && (
+                      <Text style={styles.eventNote}>Catatan: {item.note}</Text>
+                    )}
+                  </View>
+                </View>
+              )}
+            />
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -96,4 +146,13 @@ const styles = StyleSheet.create({
   sentIcon: { fontSize: 48, color: '#2e7d32', marginBottom: 16 },
   sentTitle: { fontSize: 20, fontWeight: '700', color: '#333', marginBottom: 8 },
   sentDesc: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 20 },
+  historySection: { width: '100%', marginTop: 32 },
+  historyTitle: { fontSize: 15, fontWeight: '700', color: '#333', marginBottom: 8 },
+  emptyText: { fontSize: 12, color: '#999', textAlign: 'center', marginTop: 8 },
+  eventCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: '#e5dcc9' },
+  eventIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  eventDotIcon: { width: 12, height: 12, borderRadius: 6 },
+  eventStatus: { fontSize: 13, fontWeight: '600', color: '#333' },
+  eventDate: { fontSize: 11, color: '#999', marginTop: 1 },
+  eventNote: { fontSize: 11, color: '#666', marginTop: 2 },
 });
