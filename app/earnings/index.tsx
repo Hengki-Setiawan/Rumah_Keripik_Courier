@@ -1,122 +1,189 @@
 import { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../src/theme';
-import { getToken } from '../../src/lib/storage';
-
-interface EarningItem {
-  id: string;
-  orderId: string;
-  baseFee: number;
-  bonusAmount: number;
-  status: string;
-  createdAt: string;
-}
-
-interface EarningsResponse {
-  ok: boolean;
-  earnings: EarningItem[];
-  summary: { totalConfirmed: number; pendingTotal: number; deliveryCount: number; period: string };
-}
+import { getTodayDeliveries } from '../../src/lib/api-client';
+import type { CourierDeliveryDto } from '../../src/lib/types';
 
 export default function EarningsScreen() {
-  const [data, setData] = useState<EarningsResponse | null>(null);
+  const [deliveries, setDeliveries] = useState<CourierDeliveryDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => { loadEarnings(); }, [period]);
+  useEffect(() => { loadData(); }, []);
 
-  async function loadEarnings() {
-    setLoading(true);
+  async function loadData() {
     try {
-      const token = await getToken();
-      const res = await fetch(`https://rumah-keripik.vercel.app/api/courier/earnings?period=${period}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (json.ok) setData(json);
-    } finally {
-      setLoading(false);
-    }
+      const data = await getTodayDeliveries();
+      setDeliveries(data.deliveries || []);
+    } catch {}
+    setLoading(false);
+    setRefreshing(false);
   }
 
-  function formatRp(n: number) { return `Rp ${n.toLocaleString('id-ID')}`; }
+  const completed = deliveries.filter((d) => d.status === 'Terkirim');
+  const failed = deliveries.filter((d) => d.status === 'Gagal');
+  const totalEarnings = completed.reduce((sum, d) => {
+    const itemTotal = d.items.reduce((s, item) => s + item.price * item.quantity, 0);
+    const fee = Math.round(itemTotal * 0.1);
+    return sum + Math.max(fee, 5000);
+  }, 0);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size="large" color={colors.accent} style={{ flex: 1 }} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: 'Pendapatan Saya', headerShown: true, headerStyle: { backgroundColor: '#faf6ef' }, headerTintColor: '#333' }} />
-      <View style={styles.periodRow}>
-        {(['daily', 'weekly', 'monthly'] as const).map((p) => (
-          <TouchableOpacity key={p} style={[styles.periodBtn, period === p && styles.periodBtnActive]} onPress={() => setPeriod(p)}>
-            <Text style={[styles.periodText, period === p && styles.periodTextActive]}>
-              {p === 'daily' ? 'Harian' : p === 'weekly' ? 'Mingguan' : 'Bulanan'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {loading ? (
-        <ActivityIndicator size="large" color="#c55a2b" style={{ marginTop: 40 }} />
-      ) : data ? (
-        <>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Total Pendapatan</Text>
-            <Text style={styles.summaryAmount}>{formatRp(data.summary.totalConfirmed)}</Text>
-            <Text style={styles.summaryMeta}>{data.summary.deliveryCount} pengiriman</Text>
-            {data.summary.pendingTotal > 0 && (
-              <Text style={styles.pendingNote}>Pending: {formatRp(data.summary.pendingTotal)}</Text>
-            )}
+      <Stack.Screen options={{ headerShown: true, title: 'Pendapatan Saya' }} />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}
+      >
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Pendapatan Hari Ini</Text>
+          <Text style={styles.summaryAmount}>Rp {totalEarnings.toLocaleString('id-ID')}</Text>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryItemValue}>{completed.length}</Text>
+              <Text style={styles.summaryItemLabel}>Terkirim</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryItemValue, { color: colors.error }]}>{failed.length}</Text>
+              <Text style={styles.summaryItemLabel}>Gagal</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryItemValue}>{deliveries.length}</Text>
+              <Text style={styles.summaryItemLabel}>Total Tugas</Text>
+            </View>
           </View>
+        </View>
 
-          <FlatList
-            data={data.earnings}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.list}
-            renderItem={({ item }) => (
-              <View style={styles.item}>
-                <View style={styles.itemLeft}>
-                  <Text style={styles.itemOrder}>{item.orderId}</Text>
-                  <Text style={styles.itemDate}>{new Date(item.createdAt).toLocaleDateString('id-ID')}</Text>
+        <Text style={styles.sectionTitle}>Riwayat Detail</Text>
+        {completed.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.emptyText}>Belum ada pengiriman selesai hari ini</Text>
+          </View>
+        ) : (
+          completed.map((d) => {
+            const itemTotal = d.items.reduce((s, item) => s + item.price * item.quantity, 0);
+            const fee = Math.max(Math.round(itemTotal * 0.1), 5000);
+            return (
+              <TouchableOpacity key={d.id} style={styles.card} onPress={() => router.push(`/delivery/${d.id}`)}>
+                <View style={styles.row}>
+                  <Text style={styles.orderCode}>{d.kode_pesanan}</Text>
+                  <Text style={styles.amount}>Rp {fee.toLocaleString('id-ID')}</Text>
                 </View>
-                <View style={styles.itemRight}>
-                  <Text style={styles.itemAmount}>{formatRp(item.baseFee + item.bonusAmount)}</Text>
-                  {item.bonusAmount > 0 && <Text style={styles.bonus}>+{formatRp(item.bonusAmount)} bonus</Text>}
-                </View>
-              </View>
-            )}
-            ListEmptyComponent={<Text style={styles.empty}>Belum ada pendapatan</Text>}
-          />
-        </>
-      ) : (
-        <Text style={styles.empty}>Gagal memuat data</Text>
-      )}
+                <Text style={styles.customerName}>{d.customer_name}</Text>
+                <Text style={styles.itemSummary}>{d.items.map((i) => `${i.name} x${i.quantity}`).join(', ')}</Text>
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#faf6ef' },
-  periodRow: { flexDirection: 'row', padding: spacing.md, gap: 8 },
-  periodBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: '#fff', alignItems: 'center', borderWidth: 1, borderColor: '#e5dcc9' },
-  periodBtnActive: { backgroundColor: '#c55a2b', borderColor: '#c55a2b' },
-  periodText: { fontSize: 13, fontWeight: '500', color: '#666' },
-  periodTextActive: { color: '#fff' },
-  summaryCard: { backgroundColor: '#fff', margin: spacing.md, padding: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center' },
-  summaryLabel: { fontSize: 14, color: '#666' },
-  summaryAmount: { fontSize: 28, fontWeight: '700', color: '#2e7d32', marginVertical: 4 },
-  summaryMeta: { fontSize: 13, color: '#999' },
-  pendingNote: { fontSize: 12, color: '#c55a2b', marginTop: 4 },
-  list: { padding: spacing.md },
-  item: {
-    backgroundColor: '#fff', borderRadius: borderRadius.md, padding: spacing.md, marginBottom: 8,
-    flexDirection: 'row', justifyContent: 'space-between',
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
   },
-  itemLeft: {},
-  itemOrder: { fontSize: 13, fontWeight: '600', color: '#333' },
-  itemDate: { fontSize: 11, color: '#999', marginTop: 2 },
-  itemRight: { alignItems: 'flex-end' },
-  itemAmount: { fontSize: 15, fontWeight: '700', color: '#333' },
-  bonus: { fontSize: 11, color: '#2e7d32' },
-  empty: { textAlign: 'center', color: '#999', marginTop: 40 },
+  scroll: {
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl + 20,
+  },
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  summaryAmount: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: colors.accent,
+    marginVertical: spacing.md,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: spacing.sm,
+  },
+  summaryItem: {
+    alignItems: 'center',
+  },
+  summaryItemValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  summaryItemLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  orderCode: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  amount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.green,
+  },
+  customerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  itemSummary: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: colors.textMuted,
+    fontSize: 14,
+    paddingVertical: spacing.lg,
+  },
 });

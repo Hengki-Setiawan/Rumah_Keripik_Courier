@@ -2,7 +2,7 @@ import { getToken, removeToken } from './storage';
 import type { CourierDeliveryDto, Waypoint, CourierDto, CompleteData, FailData } from './types';
 import { enqueueRequest, processQueue } from './offline-queue';
 
-const BASE_URL = 'https://rumah-keripik.vercel.app';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://rumah-keripik.vercel.app';
 
 async function request<T>(
   path: string,
@@ -114,5 +114,26 @@ export async function respondToOffer(assignmentId: number, action: 'accept' | 'r
   return request<{ ok: boolean; action: string }>(
     '/api/courier/offers/respond',
     { method: 'POST', body: JSON.stringify({ assignmentId, action }) }
+  );
+}
+
+export async function bindDevice(deviceId: string) {
+  return request<{ ok: boolean; deviceBound: boolean }>(
+    '/api/courier/device',
+    { method: 'POST', body: JSON.stringify({ action: 'bind', deviceId }) }
+  );
+}
+
+export async function unboundDevice() {
+  return request<{ ok: boolean; deviceUnbound: boolean }>(
+    '/api/courier/device',
+    { method: 'POST', body: JSON.stringify({ action: 'unbind' }) }
+  );
+}
+
+export async function verifyDeviceBinding(deviceId: string) {
+  return request<{ ok: boolean; bound: boolean }>(
+    '/api/courier/device',
+    { method: 'POST', body: JSON.stringify({ action: 'verify', deviceId }) }
   );
 }

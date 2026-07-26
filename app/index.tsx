@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Alert, Platform } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Alert, Platform, Image } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius } from '../src/theme';
@@ -30,6 +30,10 @@ export default function DashboardScreen() {
             loadDeliveries();
           }
         }).catch(() => loadDeliveries());
+      } else if (data.type === 'order_update' && data.orderId) {
+        loadDeliveries();
+      } else if (data.type === 'route_update') {
+        loadDeliveries();
       }
     });
     return () => unsub();
@@ -159,9 +163,18 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container}>
       <OfflineBanner />
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Halo, {courier?.name || 'Kurir'}</Text>
-          <Text style={styles.headerSub}>{deliveries.length} kiriman hari ini</Text>
+        <View style={styles.headerLeft}>
+          {courier?.photo_url ? (
+            <Image source={{ uri: courier.photo_url }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>{courier?.name?.charAt(0) || 'K'}</Text>
+            </View>
+          )}
+          <View>
+            <Text style={styles.headerTitle}>Halo, {courier?.name || 'Kurir'}</Text>
+            <Text style={styles.headerSub}>{deliveries.length} kiriman hari ini</Text>
+          </View>
         </View>
         <TouchableOpacity onPress={handleLogout}>
           <Text style={styles.logout}>Logout</Text>
@@ -282,6 +295,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.accent,
   },
   headerTitle: {
     fontSize: 20,

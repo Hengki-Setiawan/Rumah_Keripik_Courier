@@ -5,6 +5,7 @@ export interface CourierDto {
   vehicle: string | null;
   plat_no: string | null;
   is_active: boolean;
+  photo_url?: string | null;
 }
 
 export interface CourierDeliveryItem {
@@ -36,6 +37,7 @@ export interface Waypoint {
   name: string;
   type: 'start' | 'destination' | 'current';
   id_transaksi?: string;
+  sequence_no?: number;
 }
 
 export interface RouteResponse {

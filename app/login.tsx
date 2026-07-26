@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { colors, spacing, borderRadius } from '../src/theme';
-import { login } from '../src/lib/api-client';
+import { login, bindDevice } from '../src/lib/api-client';
 import { saveToken, saveCourierData } from '../src/lib/storage';
 import { requestLocationPermissions } from '../src/lib/location';
+import * as Device from 'expo-device';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
@@ -24,6 +25,11 @@ export default function LoginScreen() {
       const data = await login(phone, pin);
       await saveToken(data.token);
       await saveCourierData(data.courier);
+
+      try {
+        const deviceId = Device.deviceName || `${Device.osName}-${Device.osVersion}`;
+        await bindDevice(deviceId);
+      } catch {}
 
       const hasLocation = await requestLocationPermissions();
       if (!hasLocation) {

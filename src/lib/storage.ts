@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import type { CourierDto } from './types';
 
 const TOKEN_KEY = 'auth_token';
 const COURIER_KEY = 'courier_data';
@@ -16,7 +17,7 @@ export async function removeToken() {
   await SecureStore.deleteItemAsync(COURIER_KEY);
 }
 
-export async function saveCourierData(courier: object) {
+export async function saveCourierData(courier: CourierDto) {
   await SecureStore.setItemAsync(COURIER_KEY, JSON.stringify(courier));
 }
 

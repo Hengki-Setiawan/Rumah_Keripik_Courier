@@ -3,7 +3,7 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { getToken } from './storage';
 
-const BASE_URL = 'https://rumah-keripik.vercel.app';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://rumah-keripik.vercel.app';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
