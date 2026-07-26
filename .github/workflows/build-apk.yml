@@ -50,10 +50,22 @@ jobs:
       - name: Prebuild (generate android folder)
         run: npx expo prebuild --no-install
 
+      - name: Configure APK splitting (smaller APK)
+        run: |
+          node -e "
+            const fs = require('fs');
+            let build = fs.readFileSync('android/app/build.gradle', 'utf8');
+            build = build.replace(
+              /    defaultConfig {/,
+              '    splits {\n        abi {\n            enable true\n            reset()\n            include \"arm64-v8a\", \"armeabi-v7a\", \"x86_64\", \"x86\"\n            universalApk false\n        }\n    }\n    defaultConfig {'
+            );
+            fs.writeFileSync('android/app/build.gradle', build);
+          "
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK (debug)
+      - name: Build APK (debug - split by arch)
         run: cd android && ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK Artifact
