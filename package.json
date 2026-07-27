@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
-    "@sentry/react-native": "^6.5.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
+    "@sentry/react-native": "^6.5.0",
     "expo": "~57.0.7",
     "expo-constants": "~57.0.6",
     "expo-device": "~57.0.1",
@@ -30,13 +30,17 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "detox": "^20.51.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "detox:build": "npx expo run:android --variant debug --no-install",
+    "detox:test": "detox test --configuration android.emu.debug --cleanup",
+    "detox:test:ios": "detox test --configuration ios.sim.debug --cleanup"
   },
   "private": true
 }
