@@ -1,0 +1,10 @@
+appId: com.hengkisetiawan.rumahkeripikcourier
+---
+- launchApp
+- assertVisible: "Rumah Keripik"
+- assertVisible: "Login Kurir"
+- assertVisible: "Nomor Telepon"
+- assertVisible: "Masuk"
+
+- tapOn: "Masuk"
+- assertVisible: "Nomor telepon tidak valid"

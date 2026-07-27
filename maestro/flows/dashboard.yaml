@@ -1,0 +1,5 @@
+appId: com.hengkisetiawan.rumahkeripikcourier
+---
+- launchApp
+- tapOn: "Masuk"
+- assertVisible: "Nomor telepon tidak valid"

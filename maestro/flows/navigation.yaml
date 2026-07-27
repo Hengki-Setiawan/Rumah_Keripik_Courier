@@ -1,0 +1,5 @@
+appId: com.hengkisetiawan.rumahkeripikcourier
+---
+- launchApp
+- assertVisible: "Login Kurir"
+- assertVisible: "Masuk"

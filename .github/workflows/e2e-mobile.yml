@@ -1,4 +1,4 @@
-name: E2E Mobile (Detox)
+name: E2E Mobile (Maestro)
 
 on:
   workflow_dispatch:
@@ -10,8 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  detox:
-    name: Android Detox
+  maestro-android:
+    name: Android Maestro
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,17 +32,21 @@ jobs:
         run: npx expo prebuild --no-install
       - name: Build APK
         run: npx expo run:android --variant debug --no-install 2>&1 || (cd android && ./gradlew assembleDebug --no-daemon 2>&1)
-      - name: Run Detox
+      - name: Setup Maestro + Run Tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           avd-name: Pixel_6_API_34
           api-level: 34
           target: google_apis
           arch: x86_64
-          script: npx detox test --configuration android.emu.debug --cleanup --headless --record-logs all --take-screenshots failing
+          script: |
+            adb install android/app/build/outputs/apk/debug/app-debug.apk
+            curl -Ls "https://get.maestro.mobile.dev" | bash
+            export PATH="$PATH:$HOME/.maestro/bin"
+            maestro test maestro/ --format junit --output maestro-report.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: detox-report
-          path: artifacts/
+          name: maestro-report
+          path: maestro-report.xml
           retention-days: 14
