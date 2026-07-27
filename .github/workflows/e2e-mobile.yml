@@ -32,7 +32,11 @@ jobs:
         run: npx expo prebuild --no-install
       - name: Build APK
         run: npx expo run:android --variant debug --no-install 2>&1 || (cd android && ./gradlew assembleDebug --no-daemon 2>&1)
-      - name: Setup Maestro + Run Tests
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+      - name: Run Maestro tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           avd-name: Pixel_6_API_34
@@ -40,9 +44,7 @@ jobs:
           target: google_apis
           arch: x86_64
           script: |
-            adb install android/app/build/outputs/apk/debug/app-debug.apk
-            curl -Ls "https://get.maestro.mobile.dev" | bash
-            export PATH="$PATH:$HOME/.maestro/bin"
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             maestro test maestro/ --format junit --output maestro-report.xml
       - uses: actions/upload-artifact@v4
         if: always()
