@@ -16,8 +16,8 @@ export default function LoginScreen() {
     if (phone.length < 10) {
       return Alert.alert('Error', 'Nomor telepon tidak valid');
     }
-    if (pin.length !== 6) {
-      return Alert.alert('Error', 'PIN harus 6 digit');
+    if (pin.length < 4 || pin.length > 6) {
+      return Alert.alert('Error', 'PIN harus 4-6 digit');
     }
 
     setLoading(true);
