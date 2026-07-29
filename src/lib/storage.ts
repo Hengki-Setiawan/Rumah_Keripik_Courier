@@ -5,6 +5,9 @@ const TOKEN_KEY = 'auth_token';
 const COURIER_KEY = 'courier_data';
 
 export async function saveToken(token: string) {
+  if (!token || typeof token !== 'string') {
+    throw new Error('Token autentikasi tidak valid');
+  }
   await SecureStore.setItemAsync(TOKEN_KEY, token);
 }
 

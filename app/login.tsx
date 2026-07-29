@@ -23,7 +23,11 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const data = await login(phone, pin);
-      await saveToken(data.token);
+      const token = data.accessToken || data.token;
+      if (!token) {
+        throw new Error('Token autentikasi tidak ditemukan dari server');
+      }
+      await saveToken(token);
       await saveCourierData(data.courier);
 
       try {

@@ -56,7 +56,7 @@ async function request<T>(
 }
 
 export async function login(phone: string, pin: string) {
-  return request<{ token: string; courier: CourierDto }>(
+  return request<{ token?: string; accessToken?: string; refreshToken?: string; courier: CourierDto }>(
     '/api/courier/auth/login',
     {
       method: 'POST',
