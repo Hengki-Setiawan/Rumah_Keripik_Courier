@@ -1,17 +1,22 @@
-import { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Linking } from 'react-native';
-import { router, useLocalSearchParams, Stack } from 'expo-router';
-import MapView, { Polyline, Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Linking, Alert } from 'react-native';
+import { router, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
+import MapView, { Polyline, Marker, Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius } from '../../../src/theme';
+import { Navigation, ArrowLeft, MapPin, RotateCw } from 'lucide-react-native';
+
+import { useAppColors, spacing, borderRadius } from '../../../src/theme';
 import { getTodayRoute } from '../../../src/lib/api-client';
 import { getCurrentLocation } from '../../../src/lib/location';
+import { GlassBottomSheet } from '../../../src/components/ui/GlassBottomSheet';
+import { t } from '../../../src/i18n';
 import type { Waypoint } from '../../../src/lib/types';
 
 const GUDANG_LAT = -5.1340;
 const GUDANG_LNG = 119.4135;
 
 export default function MapScreen() {
+  const colors = useAppColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const mapRef = useRef<MapView>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
@@ -20,12 +25,17 @@ export default function MapScreen() {
   const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
   const [multiRouteCoords, setMultiRouteCoords] = useState<Array<Array<{ latitude: number; longitude: number }>>>([]);
   const [allStops, setAllStops] = useState<Waypoint[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
-  useEffect(() => {
-    init();
-  }, [id]);
+  useFocusEffect(
+    useCallback(() => {
+      init();
+    }, [id])
+  );
 
   async function init() {
+    setError(null);
     const loc = await getCurrentLocation();
     let coords: { latitude: number; longitude: number } | null = null;
     if (loc) {
@@ -65,10 +75,11 @@ export default function MapScreen() {
               );
               segmentCoords.push(coords);
             }
-          } catch {}
+          } catch {
+            console.warn(`OSRM segment ${i} failed, skipping`);
+          }
         }
         setMultiRouteCoords(segmentCoords);
-
         const fullCoords = segmentCoords.flat();
         setRouteCoords(fullCoords);
       } else if (dests.length === 1) {
@@ -85,9 +96,22 @@ export default function MapScreen() {
             setRouteCoords(coords);
             setMultiRouteCoords([coords]);
           }
-        } catch {}
+        } catch {
+          console.warn('OSRM single route failed');
+        }
       }
-    } catch {}
+    } catch (e) {
+      console.error('loadRouteData failed:', e);
+      setError('Gagal memuat rute. Periksa koneksi Anda.');
+    }
+  }
+
+  function handleRetry() {
+    setRetrying(true);
+    setLoading(true);
+    init().finally(() => {
+      setRetrying(false);
+    });
   }
 
   function openExternalMaps() {
@@ -113,15 +137,58 @@ export default function MapScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
         <ActivityIndicator size="large" color={colors.accent} style={{ flex: 1 }} />
       </SafeAreaView>
     );
   }
 
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            title: t('map.routeTitle'),
+            headerStyle: { backgroundColor: colors.surface },
+            headerTintColor: colors.text,
+          }}
+        />
+        <View style={styles.errorContainer}>
+          <MapPin size={48} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, { color: colors.text }]}>{error}</Text>
+          <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
+            Pastikan koneksi internet stabil dan coba lagi
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryBtn, { backgroundColor: colors.accent }]}
+            onPress={handleRetry}
+            disabled={retrying}
+          >
+            {retrying ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <RotateCw size={16} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.retryBtnText}>Coba Lagi</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: 'Rute Pengiriman' }} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: t('map.routeTitle'),
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+        }}
+      />
 
       <MapView
         ref={mapRef}
@@ -131,17 +198,16 @@ export default function MapScreen() {
         showsMyLocationButton
       >
         {currentLocation && (
-          <Marker coordinate={currentLocation} title="Posisi Saya" pinColor="#2563eb" />
+          <Marker coordinate={currentLocation} title={t('map.myLocation')} pinColor="#2563eb" />
         )}
         {allStops.map((stop, index) => (
           <Marker
             key={`stop-${index}`}
             coordinate={{ latitude: stop.lat, longitude: stop.lng }}
             title={`${index + 1}. ${stop.name}`}
-            description={`Stop ke-${index + 1}`}
-            pinColor={colors.accent}
+            description={t('map.stopNumber', { number: index + 1 })}
           >
-            <View style={styles.markerNumber}>
+            <View style={[styles.markerNumber, { backgroundColor: colors.accent }]}>
               <Text style={styles.markerNumberText}>{index + 1}</Text>
             </View>
           </Marker>
@@ -160,67 +226,93 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      <View style={styles.bottomSheet}>
-        <View style={styles.stopList}>
-          <Text style={styles.stopListTitle}>Rute Pengiriman ({allStops.length} stop)</Text>
-          {allStops.map((stop, index) => (
-            <View key={index} style={styles.stopItem}>
-              <View style={styles.stopNumber}>
-                <Text style={styles.stopNumberText}>{index + 1}</Text>
-              </View>
-              <View style={styles.stopInfo}>
-                <Text style={styles.stopName} numberOfLines={1}>{stop.name}</Text>
-              </View>
+      <GlassBottomSheet snapPoints={[200, 320]} title={t('map.routeStops', { count: allStops.length })}>
+        {allStops.map((stop, index) => (
+          <View key={index} style={styles.stopItem}>
+            <View style={[styles.stopNumber, { backgroundColor: colors.accent }]}>
+              <Text style={styles.stopNumberText}>{index + 1}</Text>
             </View>
-          ))}
-        </View>
+            <View style={styles.stopInfo}>
+              <Text style={[styles.stopName, { color: colors.text }]} numberOfLines={1}>{stop.name}</Text>
+            </View>
+          </View>
+        ))}
 
-        <TouchableOpacity style={styles.navButton} onPress={openExternalMaps}>
-          <Text style={styles.navButtonText}>🗺️ Buka di Google Maps ({allStops.length} stop)</Text>
+        <TouchableOpacity style={[styles.navButton, { backgroundColor: colors.accent }]} onPress={openExternalMaps}>
+          <Navigation size={16} color="#ffffff" style={{ marginRight: 8 }} />
+          <Text style={styles.navButtonText}>{t('map.openInMaps', { count: allStops.length })}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>← Kembali</Text>
+          <ArrowLeft size={16} color={colors.accent} style={{ marginRight: 6 }} />
+          <Text style={[styles.backButtonText, { color: colors.accent }]}>{t('common.back')}</Text>
         </TouchableOpacity>
-      </View>
+      </GlassBottomSheet>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1 },
   map: { flex: 1 },
-  bottomSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-    maxHeight: 280,
-  },
-  stopList: { marginBottom: spacing.md },
-  stopListTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  stopListTitle: { fontSize: 14, fontWeight: '700', marginBottom: spacing.sm },
   stopItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   stopNumber: {
-    width: 22, height: 22, borderRadius: 11, backgroundColor: colors.accent,
+    width: 22, height: 22, borderRadius: 11,
     alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm,
   },
   stopNumberText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   stopInfo: { flex: 1 },
-  stopName: { fontSize: 13, color: colors.text },
+  stopName: { fontSize: 13 },
   navButton: {
-    backgroundColor: colors.accent, borderRadius: borderRadius.md,
-    padding: spacing.md + 2, alignItems: 'center', marginBottom: spacing.md,
+    flexDirection: 'row',
+    borderRadius: borderRadius.md,
+    padding: spacing.md + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
-  navButtonText: { color: colors.white, fontSize: 16, fontWeight: '600' },
-  backButton: { alignItems: 'center', paddingVertical: spacing.sm },
-  backButtonText: { color: colors.accent, fontSize: 14 },
+  navButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+  },
+  backButtonText: { fontSize: 14 },
   markerNumber: {
-    width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent,
+    width: 26, height: 26, borderRadius: 13,
     alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff',
   },
   markerNumberText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
+    minHeight: 48,
+  },
+  retryBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });

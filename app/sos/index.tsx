@@ -1,15 +1,19 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
+import { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
-import { ShieldAlert, AlertTriangle, PhoneCall, ArrowLeft } from 'lucide-react-native';
+import { ShieldAlert, AlertTriangle, PhoneCall, MessageCircle } from 'lucide-react-native';
 
 import { useAppColors, spacing, borderRadius } from '../../src/theme';
+import { GlassCard } from '../../src/components/ui/GlassCard';
 import { getToken } from '../../src/lib/storage';
+import { SOS_FALLBACK_CONTACTS } from '../../src/lib/theme-context';
+import { t } from '../../src/i18n';
 
-const SOS_CONTACTS = process.env.EXPO_PUBLIC_SOS_PHONE || '08123456789';
+const SOS_CONTACTS = process.env.EXPO_PUBLIC_SOS_PHONE || SOS_FALLBACK_CONTACTS[0];
 
 export default function SosScreen() {
   const colors = useAppColors();
@@ -34,14 +38,17 @@ export default function SosScreen() {
         body: JSON.stringify({ location, timestamp: new Date().toISOString() }),
       });
       Alert.alert(
-        'Sinyal Darurat SOS Terkirim',
-        'Bantuan sedang diproses. Tim Admin telah menerima lokasi GPS darurat Anda dan akan segera menghubungi.'
+        t('sos.sentTitle'),
+        t('sos.sent')
       );
       router.back();
     } catch {
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      }
       Alert.alert(
-        'Gagal Mengirim Sinyal SOS',
-        'Tidak dapat terhubung ke server. Silakan langsung telepon Admin Darurat di: ' + SOS_CONTACTS
+        t('sos.failTitle'),
+        t('sos.failMessage', { phone: SOS_CONTACTS })
       );
     } finally {
       setSending(false);
@@ -52,7 +59,7 @@ export default function SosScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <Stack.Screen
         options={{
-          title: 'Sinyal Darurat SOS',
+          title: t('sos.title'),
           headerShown: true,
           headerStyle: { backgroundColor: colors.surface },
           headerTintColor: colors.text,
@@ -63,9 +70,9 @@ export default function SosScreen() {
           <ShieldAlert size={40} color={colors.error} />
         </View>
 
-        <Text style={[styles.title, { color: colors.text }]}>Sinyal SOS Darurat</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t('sos.title')}</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Tekan tombol di bawah untuk membunyikan alarm bantuan darurat & lokasi GPS ke Tim Admin.
+          {t('sos.instructions')}
         </Text>
 
         <TouchableOpacity
@@ -86,25 +93,50 @@ export default function SosScreen() {
 
         {sending && (
           <Text style={[styles.sendingText, { color: colors.accent }]}>
-            Mengirim lokasi GPS & sinyal darurat ke server...
+            {t('sos.sending')}
           </Text>
         )}
 
-        <View style={[styles.infoBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <AlertTriangle size={18} color={colors.warning} style={{ marginRight: 8 }} />
-          <Text style={[styles.info, { color: colors.textMuted }]}>
-            Lokasi presisi GPS kurir akan langsung terkirim ke peta monitor admin untuk penanganan instan.
-          </Text>
-        </View>
+        {!sending && (
+          <TouchableOpacity
+            style={[styles.whatsappBtn, { backgroundColor: '#25D366' }]}
+            onPress={() => {
+              const msg = encodeURIComponent('SOS Darurat — Saya butuh bantuan segera!');
+              const url = `whatsapp://send?phone=${SOS_CONTACTS}&text=${msg}`;
+              Linking.openURL(url).catch(() => {
+                Alert.alert('WhatsApp tidak terinstall', `Hubungi ${SOS_CONTACTS} langsung`);
+              });
+            }}
+          >
+            <MessageCircle size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.whatsappBtnText}>Chat WhatsApp Darurat</Text>
+          </TouchableOpacity>
+        )}
+
+        <GlassCard noPadding>
+          <View style={styles.contactsBox}>
+            <PhoneCall size={14} color={colors.textMuted} style={{ marginRight: 6 }} />
+            <Text style={[styles.contactsText, { color: colors.textMuted }]}>
+              Kontak darurat: {SOS_FALLBACK_CONTACTS.join(', ')}
+            </Text>
+          </View>
+        </GlassCard>
+
+        <GlassCard noPadding>
+          <View style={styles.infoBox}>
+            <AlertTriangle size={18} color={colors.warning} style={{ marginRight: 8 }} />
+            <Text style={[styles.info, { color: colors.textMuted }]}>
+              {t('sos.info')}
+            </Text>
+          </View>
+        </GlassCard>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   content: {
     flex: 1,
     justifyContent: 'center',
@@ -154,21 +186,27 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 2,
   },
-  disabled: {
-    opacity: 0.6,
-  },
+  disabled: { opacity: 0.6 },
   sendingText: {
     fontSize: 13,
     fontWeight: '700',
     marginBottom: spacing.md,
   },
+  whatsappBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 24, paddingVertical: spacing.md,
+    borderRadius: borderRadius.md, marginBottom: spacing.md, minHeight: 48,
+  },
+  whatsappBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  contactsBox: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: spacing.md, paddingHorizontal: spacing.md,
+  },
+  contactsText: { fontSize: 12, fontWeight: '500' },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    marginTop: spacing.md,
   },
   info: {
     flex: 1,

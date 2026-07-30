@@ -2,138 +2,111 @@ import * as SQLite from 'expo-sqlite';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
-export async function getDb(): Promise<SQLite.SQLiteDatabase> {
+export async function getDb() {
   if (!db) {
-    db = await SQLite.openDatabaseAsync('rumah-keripik-courier.db');
+    db = await SQLite.openDatabaseAsync('rumah-kripik-courier.db');
+    await initTables(db);
   }
   return db;
 }
 
-export async function initDatabase() {
-  const database = await getDb();
-
+async function initTables(database: SQLite.SQLiteDatabase) {
   await database.execAsync(`
-    PRAGMA journal_mode = WAL;
-
-    CREATE TABLE IF NOT EXISTS delivery_cache (
-      id INTEGER PRIMARY KEY,
-      id_transaksi TEXT NOT NULL,
-      kode_pesanan TEXT,
-      status TEXT NOT NULL DEFAULT 'Siap_Dikirim',
-      customer_name TEXT,
-      customer_phone TEXT,
-      address TEXT,
-      latitude TEXT,
-      longitude TEXT,
-      distance_km TEXT,
-      notes TEXT,
-      route_order INTEGER DEFAULT 0,
-      created_at TEXT,
-      cached_at TEXT NOT NULL DEFAULT (datetime('now'))
+    CREATE TABLE IF NOT EXISTS local_deliveries (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      status TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      is_dirty INTEGER DEFAULT 0
     );
-
-    CREATE INDEX IF NOT EXISTS idx_delivery_cache_status ON delivery_cache(status);
-    CREATE INDEX IF NOT EXISTS idx_delivery_cache_cached ON delivery_cache(cached_at);
-
-    CREATE TABLE IF NOT EXISTS courier_profile_cache (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL,
-      phone TEXT,
-      vehicle TEXT,
-      plat_no TEXT,
-      photo_url TEXT,
-      cached_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS offline_outbox (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CREATE TABLE IF NOT EXISTS sync_outbox (
+      id TEXT PRIMARY KEY,
       endpoint TEXT NOT NULL,
-      method TEXT NOT NULL DEFAULT 'POST',
-      payload TEXT,
-      token TEXT,
-      priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('high','normal')),
-      attempts INTEGER NOT NULL DEFAULT 0,
-      last_error TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      method TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      attempt_count INTEGER DEFAULT 0,
+      last_attempt_at INTEGER,
+      status TEXT DEFAULT 'pending'
     );
-
-    CREATE INDEX IF NOT EXISTS idx_outbox_priority ON offline_outbox(priority, created_at);
+    CREATE TABLE IF NOT EXISTS location_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lat REAL, lng REAL, accuracy REAL, speed REAL, heading REAL,
+      recorded_at INTEGER NOT NULL,
+      delivery_id TEXT,
+      synced INTEGER DEFAULT 0
+    );
   `);
 }
 
-export async function cacheDeliveries(deliveries: any[]) {
+export async function saveDeliveriesOffline(
+  deliveries: { id: string; data: string; status: string; updated_at: number }[]
+) {
   const database = await getDb();
-  await database.execAsync('DELETE FROM delivery_cache');
   const stmt = await database.prepareAsync(
-    'INSERT INTO delivery_cache (id, id_transaksi, kode_pesanan, status, customer_name, customer_phone, address, latitude, longitude, distance_km, notes, route_order, created_at) VALUES ($id, $id_transaksi, $kode_pesanan, $status, $customer_name, $customer_phone, $address, $latitude, $longitude, $distance_km, $notes, $route_order, $created_at)'
+    'INSERT OR REPLACE INTO local_deliveries (id, data, status, updated_at, is_dirty) VALUES ($id, $data, $status, $updated_at, 0)'
   );
   for (const d of deliveries) {
     await stmt.executeAsync({
       $id: d.id,
-      $id_transaksi: d.id_transaksi,
-      $kode_pesanan: d.kode_pesanan || null,
+      $data: d.data,
       $status: d.status,
-      $customer_name: d.customer_name || null,
-      $customer_phone: d.customer_phone || null,
-      $address: d.address || null,
-      $latitude: d.latitude || null,
-      $longitude: d.longitude || null,
-      $distance_km: d.distance_km || null,
-      $notes: d.notes || null,
-      $route_order: d.route_order || 0,
-      $created_at: d.created_at || null,
+      $updated_at: d.updated_at,
     });
   }
   await stmt.finalizeAsync();
 }
 
-export async function getCachedDeliveries(status?: string) {
+export async function getCachedDeliveries(): Promise<string[]> {
   const database = await getDb();
-  if (status) {
-    const rows = await database.getAllAsync<any>(
-      'SELECT * FROM delivery_cache WHERE status = $status ORDER BY route_order ASC',
-      { $status: status }
-    );
-    return rows;
+  const rows = await database.getAllAsync<{ data: string }>(
+    'SELECT data FROM local_deliveries ORDER BY updated_at DESC'
+  );
+  return rows.map((r) => r.data);
+}
+
+export async function enqueueMutation(
+  id: string,
+  endpoint: string,
+  method: string,
+  payload: Record<string, unknown>
+) {
+  const database = await getDb();
+  await database.runAsync(
+    `INSERT OR REPLACE INTO sync_outbox (id, endpoint, method, payload, created_at, status) VALUES (?, ?, ?, ?, ?, 'pending')`,
+    id,
+    endpoint,
+    method,
+    JSON.stringify(payload),
+    Date.now()
+  );
+}
+
+export async function enqueueLocationPoints(
+  points: {
+    lat: number;
+    lng: number;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+    recorded_at: number;
+    delivery_id?: string;
+  }[]
+) {
+  const database = await getDb();
+  const stmt = await database.prepareAsync(
+    'INSERT INTO location_queue (lat, lng, accuracy, speed, heading, recorded_at, delivery_id) VALUES ($lat, $lng, $accuracy, $speed, $heading, $recorded_at, $delivery_id)'
+  );
+  for (const p of points) {
+    await stmt.executeAsync({
+      $lat: p.lat,
+      $lng: p.lng,
+      $accuracy: p.accuracy ?? null,
+      $speed: p.speed ?? null,
+      $heading: p.heading ?? null,
+      $recorded_at: p.recorded_at,
+      $delivery_id: p.delivery_id ?? null,
+    });
   }
-  const rows = await database.getAllAsync<any>(
-    'SELECT * FROM delivery_cache ORDER BY route_order ASC'
-  );
-  return rows;
-}
-
-export async function addToOutbox(endpoint: string, method: string, payload: any, token: string | null, priority: string = 'normal') {
-  const database = await getDb();
-  await database.runAsync(
-    'INSERT INTO offline_outbox (endpoint, method, payload, token, priority) VALUES ($endpoint, $method, $payload, $token, $priority)',
-    {
-      $endpoint: endpoint,
-      $method: method,
-      $payload: JSON.stringify(payload),
-      $token: token,
-      $priority: priority,
-    }
-  );
-}
-
-export async function getOutboxItems(limit: number = 20) {
-  const database = await getDb();
-  const rows = await database.getAllAsync<any>(
-    'SELECT * FROM offline_outbox ORDER BY priority ASC, created_at ASC LIMIT $limit',
-    { $limit: limit }
-  );
-  return rows;
-}
-
-export async function removeOutboxItem(id: number) {
-  const database = await getDb();
-  await database.runAsync('DELETE FROM offline_outbox WHERE id = $id', { $id: id });
-}
-
-export async function updateOutboxError(id: number, error: string) {
-  const database = await getDb();
-  await database.runAsync(
-    'UPDATE offline_outbox SET attempts = attempts + 1, last_error = $error WHERE id = $id',
-    { $id: id, $error: error }
-  );
+  await stmt.finalizeAsync();
 }

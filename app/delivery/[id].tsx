@@ -28,6 +28,12 @@ import {
 
 import { useAppColors, spacing, borderRadius } from '../../src/theme';
 import { getTodayDeliveries, startDelivery } from '../../src/lib/api-client';
+import { BigActionButton } from '../../src/components/ui/BigActionButton';
+import { GlassCard } from '../../src/components/ui/GlassCard';
+import { FloatingSosButton } from '../../src/components/FloatingSosButton';
+import { MapPreviewCard } from '../../src/components/ui/MapPreviewCard';
+import { startTracking, stopTracking, setActiveDestinations } from '../../src/location/location-manager';
+import { t } from '../../src/i18n';
 import type { CourierDeliveryDto } from '../../src/lib/types';
 
 export default function DeliveryDetailScreen() {
@@ -47,7 +53,7 @@ export default function DeliveryDetailScreen() {
       const found = data.deliveries.find((d) => String(d.id) === id);
       setDelivery(found || null);
     } catch {
-      Alert.alert('Gagal', 'Gagal memuat data detail pengiriman');
+      Alert.alert(t('common.failed'), t('delivery.loadFailed'));
     }
     setLoading(false);
   }
@@ -61,9 +67,13 @@ export default function DeliveryDetailScreen() {
     try {
       await startDelivery(delivery.id);
       setDelivery({ ...delivery, status: 'Dalam_Pengiriman' });
-      Alert.alert('Berhasil', 'Status pengiriman diubah ke Dalam Perjalanan');
+      startTracking('active_delivery');
+      if (delivery.latitude && delivery.longitude) {
+        setActiveDestinations([{ deliveryId: delivery.id, lat: parseFloat(delivery.latitude), lng: parseFloat(delivery.longitude) }]);
+      }
+      Alert.alert(t('common.success'), t('delivery.statusUpdated'));
     } catch {
-      Alert.alert('Gagal', 'Gagal memperbarui status pengiriman');
+      Alert.alert(t('common.failed'), t('delivery.statusUpdateFailed'));
     }
     setActionLoading(false);
   }
@@ -149,6 +159,9 @@ export default function DeliveryDetailScreen() {
           <TouchableOpacity
             onPress={() => router.back()}
             style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            accessibilityLabel="Kembali"
+            accessibilityRole="button"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <ArrowLeft size={16} color={colors.text} style={{ marginRight: 6 }} />
             <Text style={[styles.backButtonText, { color: colors.text }]}>Kembali</Text>
@@ -173,51 +186,53 @@ export default function DeliveryDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Status Header Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.statusRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <FileText size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
-              <Text style={[styles.orderCode, { color: colors.textSecondary }]}>
-                {delivery.kode_pesanan}
-              </Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+        <GlassCard noPadding>
+          <View style={styles.cardInner}>
+            <View style={styles.statusRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <FileText size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
+                <Text style={[styles.orderCode, { color: colors.textSecondary }]}>
+                  {delivery.kode_pesanan}
+                </Text>
+              </View>
+              <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+              </View>
             </View>
           </View>
-        </View>
+        </GlassCard>
 
         {/* Customer Info Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <GlassCard>
           <View style={styles.sectionHeader}>
             <User size={18} color={colors.accent} style={{ marginRight: 6 }} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Informasi Pelanggan</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('delivery.customerInfo')}</Text>
           </View>
 
-          <Text style={[styles.label, { color: colors.textMuted }]}>Nama Pembeli</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>{t('delivery.customerName')}</Text>
           <Text style={[styles.value, { color: colors.text }]}>{delivery.customer_name}</Text>
 
-          <Text style={[styles.label, { color: colors.textMuted }]}>Nomor HP (WhatsApp)</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>{t('delivery.phoneNumber')}</Text>
           <Text style={[styles.value, { color: colors.text }]}>{delivery.customer_phone}</Text>
 
-          <Text style={[styles.label, { color: colors.textMuted }]}>Alamat Tujuan</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>{t('delivery.destinationAddress')}</Text>
           <Text style={[styles.value, { color: colors.text }]}>{delivery.address}</Text>
 
           {delivery.distance_km && (
             <>
-              <Text style={[styles.label, { color: colors.textMuted }]}>Jarak dari Gudang</Text>
+              <Text style={[styles.label, { color: colors.textMuted }]}>{t('delivery.distance')}</Text>
               <Text style={[styles.value, { color: colors.accent }]}>
                 {delivery.distance_km} km
               </Text>
             </>
           )}
-        </View>
+        </GlassCard>
 
         {/* Items List Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <GlassCard>
           <View style={styles.sectionHeader}>
             <ShoppingBag size={18} color={colors.accent} style={{ marginRight: 6 }} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Rincian Barang Order</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('delivery.orderItems')}</Text>
           </View>
 
           {delivery.items.map((item, i) => (
@@ -231,82 +246,62 @@ export default function DeliveryDetailScreen() {
               </Text>
             </View>
           ))}
-        </View>
+        </GlassCard>
 
         {/* Notes Card */}
         {Boolean(delivery.notes) && (
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Catatan Pembeli</Text>
+          <GlassCard>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('delivery.notes')}</Text>
             <Text style={[styles.value, { color: colors.textSecondary }]}>{delivery.notes}</Text>
-          </View>
+          </GlassCard>
         )}
 
-        {/* Action Buttons: Phone, WhatsApp, Map */}
+        {/* Map Preview Card */}
+        <MapPreviewCard
+          destinationLat={delivery.latitude}
+          destinationLng={delivery.longitude}
+          destinationName={delivery.address}
+          distanceKm={delivery.distance_km}
+          onPress={openMap}
+        />
+
+        {/* Action Buttons: Phone, WhatsApp */}
         <View style={styles.quickActionsRow}>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          <BigActionButton
+            icon={Phone}
+            label={t('delivery.call')}
             onPress={callCustomer}
-            activeOpacity={0.7}
-          >
-            <Phone size={16} color={colors.info} />
-            <Text style={[styles.actionBtnText, { color: colors.text }]}>Telepon</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            variant="outline"
+            flex
+          />
+          <BigActionButton
+            icon={MessageCircle}
+            label="WhatsApp"
             onPress={whatsappCustomer}
-            activeOpacity={0.7}
-          >
-            <MessageCircle size={16} color={colors.green} />
-            <Text style={[styles.actionBtnText, { color: colors.text }]}>WhatsApp</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={openMap}
-            activeOpacity={0.7}
-          >
-            <Navigation size={16} color={colors.accent} />
-            <Text style={[styles.actionBtnText, { color: colors.text }]}>Navigasi Peta</Text>
-          </TouchableOpacity>
+            variant="outline"
+            flex
+          />
         </View>
 
         {/* Primary Delivery Status Actions */}
         {delivery.status === 'Siap_Dikirim' && (
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: colors.accent }]}
+          <BigActionButton
+            icon={Package}
+            label={t('delivery.startDelivery')}
             onPress={handleStart}
-            disabled={actionLoading}
-            activeOpacity={0.8}
-          >
-            {actionLoading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <View style={styles.btnInner}>
-                <Package size={18} color={colors.white} style={{ marginRight: 8 }} />
-                <Text style={[styles.primaryButtonText, { color: colors.white }]}>
-                  Ambil Barang & Mulai Kirim
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+            loading={actionLoading}
+          />
         )}
 
         {delivery.status === 'Dalam_Pengiriman' && (
           <View style={styles.inTransitRow}>
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.green, flex: 1, marginBottom: 0 }]}
+            <BigActionButton
+              icon={CheckCircle2}
+              label={t('delivery.proofOfDelivery')}
               onPress={goToProof}
-              activeOpacity={0.8}
-            >
-              <View style={styles.btnInner}>
-                <CheckCircle2 size={18} color={colors.white} style={{ marginRight: 8 }} />
-                <Text style={[styles.primaryButtonText, { color: colors.white }]}>
-                  Bukti Pengiriman
-                </Text>
-              </View>
-            </TouchableOpacity>
-
+              variant="success"
+              flex
+            />
             <TouchableOpacity
               style={[
                 styles.dangerButton,
@@ -314,6 +309,9 @@ export default function DeliveryDetailScreen() {
               ]}
               onPress={goToFail}
               activeOpacity={0.8}
+              accessibilityLabel="Laporkan gagal antar"
+              accessibilityRole="button"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <XCircle size={18} color={colors.error} />
             </TouchableOpacity>
@@ -324,13 +322,17 @@ export default function DeliveryDetailScreen() {
           style={styles.backLink}
           onPress={() => router.back()}
           activeOpacity={0.7}
+          accessibilityLabel={t('delivery.backToList')}
+          accessibilityRole="button"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <ArrowLeft size={16} color={colors.accent} style={{ marginRight: 6 }} />
           <Text style={[styles.backLinkText, { color: colors.accent }]}>
-            Kembali ke Daftar Pengiriman
+            {t('delivery.backToList')}
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      <FloatingSosButton />
     </SafeAreaView>
   );
 }
@@ -344,10 +346,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl + 20,
     gap: spacing.md,
   },
-  card: {
-    borderRadius: borderRadius.lg,
+  cardInner: {
     padding: spacing.lg,
-    borderWidth: 1,
   },
   statusRow: {
     flexDirection: 'row',

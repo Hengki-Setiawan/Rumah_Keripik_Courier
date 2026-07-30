@@ -22,17 +22,20 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  Settings,
 } from 'lucide-react-native';
 
-import { useAppColors, spacing, borderRadius } from '../src/theme';
-import { getProfile } from '../src/lib/api-client';
-import { getToken, removeToken } from '../src/lib/storage';
-import type { CourierDto } from '../src/lib/types';
+import { useAppColors, spacing, borderRadius } from '../theme';
+import { getProfile } from '../lib/api-client';
+import { getToken, removeToken } from '../lib/storage';
+import { toggleTheme } from '../lib/theme-context';
+import type { CourierDto } from '../lib/types';
 
 export default function ProfileScreen() {
   const colors = useAppColors();
   const [profile, setProfile] = useState<CourierDto | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -42,7 +45,8 @@ export default function ProfileScreen() {
     try {
       const data = await getProfile();
       setProfile(data.courier);
-    } catch {
+    } catch (e) {
+      console.error('loadProfile failed:', e);
       Alert.alert('Gagal', 'Gagal memuat profil kurir');
     }
     setLoading(false);
@@ -59,6 +63,7 @@ export default function ProfileScreen() {
   }
 
   async function performLogout() {
+    setLoggingOut(true);
     try {
       const token = await getToken();
       if (token) {
@@ -67,9 +72,19 @@ export default function ProfileScreen() {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
-    } catch {}
+    } catch (e) {
+      console.error('logout API call failed:', e);
+    }
     await removeToken();
+    setLoggingOut(false);
     router.replace('/login');
+  }
+
+  async function handleToggleTheme() {
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync().catch(() => undefined);
+    }
+    await toggleTheme();
   }
 
   if (loading) {
@@ -115,14 +130,52 @@ export default function ProfileScreen() {
           <InfoRow icon={<FileCheck size={18} color={colors.green} />} label="Plat Nomor Kendaraan" value={profile?.plat_no || '-'} />
         </View>
 
+        {/* Settings */}
+        <TouchableOpacity
+          style={[styles.toggleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => router.push('/settings' as any)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.toggleRow, { borderBottomColor: colors.border }]}>
+            <Settings size={18} color={colors.accent} style={{ marginRight: 8 }} />
+            <Text style={[styles.toggleLabel, { color: colors.text }]}>Pengaturan Aplikasi</Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </View>
+          <TouchableOpacity
+            style={styles.toggleRow}
+            onPress={handleToggleTheme}
+            activeOpacity={0.7}
+          >
+            <Sun size={18} color={colors.accent} style={{ marginRight: 8 }} />
+            <Text style={[styles.toggleLabel, { color: colors.text }]}>Tema Terang (Light Mode)</Text>
+            <View style={[styles.radio, { borderColor: colors.accent }, { backgroundColor: colors.accent }]} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.toggleRow}
+            onPress={handleToggleTheme}
+            activeOpacity={0.7}
+          >
+            <Moon size={18} color={colors.accent} style={{ marginRight: 8 }} />
+            <Text style={[styles.toggleLabel, { color: colors.text }]}>Tema Gelap (Dark Mode)</Text>
+            <View style={[styles.radio, { borderColor: colors.textMuted }]} />
+          </TouchableOpacity>
+        </TouchableOpacity>
+
         {/* Logout Button */}
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: colors.error }]}
           onPress={handleLogout}
           activeOpacity={0.8}
+          disabled={loggingOut}
         >
-          <LogOut size={18} color={colors.white} style={{ marginRight: 8 }} />
-          <Text style={styles.logoutText}>Keluar / Logout Akun</Text>
+          {loggingOut ? (
+            <ActivityIndicator color={colors.white} size="small" />
+          ) : (
+            <>
+              <LogOut size={18} color={colors.white} style={{ marginRight: 8 }} />
+              <Text style={styles.logoutText}>Keluar / Logout Akun</Text>
+            </>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -214,6 +267,30 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  toggleCard: {
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 5,
   },
   logoutButton: {
     marginTop: spacing.md,

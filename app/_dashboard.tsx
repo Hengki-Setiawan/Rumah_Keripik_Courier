@@ -1,8 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -11,8 +10,10 @@ import {
   Platform,
   Image,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlashList, FlashListRef } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
 import {
   LogOut,
@@ -27,11 +28,10 @@ import {
   History,
   MapPin,
   PackageCheck,
-  Navigation,
   Compass,
   Check,
   X,
-  ChevronRight,
+  Navigation,
 } from 'lucide-react-native';
 
 import { useAppColors, spacing, borderRadius } from '../src/theme';
@@ -39,17 +39,31 @@ import { getTodayDeliveries, getProfile, respondToOffer } from '../src/lib/api-c
 import { getCourierData, removeToken } from '../src/lib/storage';
 import { startLocationTracking, stopLocationTracking } from '../src/lib/location';
 import { registerForPushNotifications, setupNotificationListener } from '../src/lib/notifications';
+import { useAuth } from '../src/lib/auth-guard';
 import OfflineBanner from '../src/components/OfflineBanner';
+import { DeliveryCard } from '../src/components/ui/DeliveryCard';
+import { StatCard } from '../src/components/ui/StatCard';
+import { BigActionButton } from '../src/components/ui/BigActionButton';
+import { FloatingSosButton } from '../src/components/FloatingSosButton';
+import { t } from '../src/i18n';
+import {
+  usePressAnimation,
+  StaggerFadeInUp,
+  StaggerFadeIn,
+} from '../src/hooks/useMicroInteraction';
+import { impactMedium, impactLight } from '../src/lib/haptics';
 import type { CourierDeliveryDto, CourierDto } from '../src/lib/types';
 
 export default function DashboardScreen() {
   const colors = useAppColors();
+  const { signOut } = useAuth();
   const [courier, setCourier] = useState<CourierDto | null>(null);
   const [deliveries, setDeliveries] = useState<CourierDeliveryDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tracking, setTracking] = useState(false);
   const [respondedIds, setRespondedIds] = useState<number[]>([]);
+  const { animatedStyle: pressStyle, onPressIn, onPressOut } = usePressAnimation();
 
   useEffect(() => {
     initSession();
@@ -88,7 +102,7 @@ export default function DashboardScreen() {
       currentCourier = data.courier;
       setCourier(data.courier);
     } catch {
-      router.replace('/login');
+      signOut();
       return;
     }
 
@@ -106,7 +120,7 @@ export default function DashboardScreen() {
       setDeliveries(data.deliveries);
     } catch (error: unknown) {
       if (error instanceof Error && (error.message === 'NO_TOKEN' || error.message === 'UNAUTHORIZED')) {
-        router.replace('/login');
+        signOut();
       }
     }
     setLoading(false);
@@ -114,9 +128,7 @@ export default function DashboardScreen() {
   }
 
   async function toggleTracking() {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-    }
+    if (Platform.OS !== 'web') impactMedium();
     if (tracking) {
       await stopLocationTracking();
       setTracking(false);
@@ -127,18 +139,15 @@ export default function DashboardScreen() {
   }
 
   async function handleLogout() {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    }
-    Alert.alert('Konfirmasi Logout', 'Apakah Anda yakin ingin keluar dari akun kurir?', [
-      { text: 'Batal', style: 'cancel' },
+    if (Platform.OS !== 'web') impactLight();
+    Alert.alert(t('auth.logoutTitle'), t('auth.logoutConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Keluar',
+        text: t('auth.logout'),
         style: 'destructive',
         onPress: async () => {
           await stopLocationTracking();
-          await removeToken();
-          router.replace('/login');
+          await signOut();
         },
       },
     ]);
@@ -148,8 +157,10 @@ export default function DashboardScreen() {
   const pendingDeliveries = deliveries.filter((d) => d.status === 'Dalam_Pengiriman');
   const completedDeliveries = deliveries.filter((d) => d.status === 'Terkirim');
   const failedDeliveries = deliveries.filter((d) => d.status === 'Gagal');
+  const listRef = useRef<FlashListRef<CourierDeliveryDto>>(null);
   const [timers, setTimers] = useState<Record<number, number>>({});
   const [responding, setResponding] = useState<Record<number, boolean>>({});
+  const filteredDeliveries = deliveries.filter((d) => d.status !== 'Siap_Dikirim');
 
   useEffect(() => {
     if (offers.length === 0) {
@@ -168,9 +179,7 @@ export default function DashboardScreen() {
   }, [offers.length]);
 
   async function handleRespond(id: number, action: 'accept' | 'reject') {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-    }
+    if (Platform.OS !== 'web') impactMedium();
     setResponding((prev) => ({ ...prev, [id]: true }));
     try {
       await respondToOffer(id, action);
@@ -181,6 +190,35 @@ export default function DashboardScreen() {
     }
     setResponding((prev) => ({ ...prev, [id]: false }));
   }
+
+  function goToDetail(delivery: CourierDeliveryDto) {
+    if (Platform.OS !== 'web') impactLight();
+    router.push(`/delivery/${delivery.id}` as any);
+  }
+
+  // --- Context-aware adaptive action ---
+  const activeDelivery = deliveries.find((d) => d.status === 'Dalam_Pengiriman');
+  const nextAssigned = deliveries.find((d) => d.status === 'Siap_Dikirim');
+
+  function getContextAction() {
+    if (activeDelivery) {
+      return {
+        label: `Lanjutkan Antar: ${activeDelivery.customer_name}`,
+        icon: Navigation,
+        onPress: () => router.push(`/delivery/${activeDelivery.id}` as any),
+      };
+    }
+    if (nextAssigned) {
+      return {
+        label: `Mulai Antar: ${nextAssigned.customer_name}`,
+        icon: MapPin,
+        onPress: () => router.push(`/delivery/${nextAssigned.id}` as any),
+      };
+    }
+    return null;
+  }
+
+  const contextAction = getContextAction();
 
   function getStatusBadge(status: string) {
     switch (status) {
@@ -197,13 +235,6 @@ export default function DashboardScreen() {
     }
   }
 
-  function goToDetail(delivery: CourierDeliveryDto) {
-    if (Platform.OS !== 'web') {
-      Haptics.selectionAsync().catch(() => undefined);
-    }
-    router.push(`/delivery/${delivery.id}` as any);
-  }
-
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -216,7 +247,7 @@ export default function DashboardScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <OfflineBanner />
 
-      {/* Header Bar */}
+      {/* Header Bar — Zona 3: Hard-to-Reach */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           {courier?.photo_url ? (
@@ -230,10 +261,10 @@ export default function DashboardScreen() {
           )}
           <View>
             <Text style={[styles.headerTitle, { color: colors.text }]}>
-              Halo, {courier?.name || 'Kurir'}
+              {t('dashboard.greeting', { name: courier?.name || t('common.courier') })}
             </Text>
             <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
-              {deliveries.length} pengiriman hari ini
+              {t('dashboard.deliveriesToday', { count: deliveries.length })}
             </Text>
           </View>
         </View>
@@ -242,166 +273,199 @@ export default function DashboardScreen() {
           onPress={handleLogout}
           style={[styles.logoutBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           activeOpacity={0.7}
+          accessibilityLabel="Keluar"
+          accessibilityRole="button"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <LogOut size={16} color={colors.error} />
         </TouchableOpacity>
       </View>
 
-      {/* Stat Summary Cards */}
-      <View style={styles.statsRow}>
-        <View
-          style={[
-            styles.statCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderLeftColor: colors.accent,
-            },
-          ]}
-        >
-          <View style={styles.statIconHeader}>
-            <Truck size={16} color={colors.accent} />
-            <Text style={[styles.statNumber, { color: colors.text }]}>{pendingDeliveries.length}</Text>
-          </View>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Tertunda</Text>
-        </View>
+      {/* Stat Summary Cards — with stagger animation */}
+      <Animated.View style={styles.statsRow}
+        entering={StaggerFadeInUp(0)}
+      >
+        <Animated.View style={{ flex: 1 }} entering={StaggerFadeInUp(1)}>
+          <StatCard
+            icon={<Truck size={16} color={colors.accent} />}
+            value={pendingDeliveries.length}
+            label={t('dashboard.pending')}
+            color={colors.accent}
+          />
+        </Animated.View>
+        <Animated.View style={{ flex: 1 }} entering={StaggerFadeInUp(2)}>
+          <StatCard
+            icon={<CheckCircle2 size={16} color={colors.green} />}
+            value={completedDeliveries.length}
+            label={t('dashboard.completed')}
+            color={colors.green}
+          />
+        </Animated.View>
+        <Animated.View style={{ flex: 1 }} entering={StaggerFadeInUp(3)}>
+          <StatCard
+            icon={<XCircle size={16} color={colors.error} />}
+            value={failedDeliveries.length}
+            label={t('dashboard.failed')}
+            color={colors.error}
+          />
+        </Animated.View>
+      </Animated.View>
 
-        <View
-          style={[
-            styles.statCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderLeftColor: colors.green,
-            },
-          ]}
+      {/* Adaptive Context-Aware BigActionButton */}
+      {contextAction && (
+        <Animated.View
+          style={{ paddingHorizontal: spacing.xl, marginBottom: spacing.md }}
+          entering={StaggerFadeInUp(4)}
         >
-          <View style={styles.statIconHeader}>
-            <CheckCircle2 size={16} color={colors.green} />
-            <Text style={[styles.statNumber, { color: colors.text }]}>{completedDeliveries.length}</Text>
-          </View>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Terkirim</Text>
-        </View>
-
-        <View
-          style={[
-            styles.statCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderLeftColor: colors.error,
-            },
-          ]}
-        >
-          <View style={styles.statIconHeader}>
-            <XCircle size={16} color={colors.error} />
-            <Text style={[styles.statNumber, { color: colors.text }]}>{failedDeliveries.length}</Text>
-          </View>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Gagal</Text>
-        </View>
-      </View>
+          <BigActionButton
+            label={contextAction.label}
+            onPress={contextAction.onPress}
+            icon={contextAction.icon}
+            variant="primary"
+          />
+        </Animated.View>
+      )}
 
       {/* Tracking Toggle Bar */}
-      <TouchableOpacity
-        style={[
-          styles.trackingButton,
-          {
-            backgroundColor: tracking ? colors.greenLight : colors.accentLight,
-            borderColor: tracking ? colors.green : colors.accent,
-          },
-        ]}
-        onPress={toggleTracking}
-        activeOpacity={0.8}
-      >
-        <Compass size={18} color={tracking ? colors.green : colors.accent} style={{ marginRight: 8 }} />
-        <Text style={[styles.trackingText, { color: tracking ? colors.green : colors.accent }]}>
-          {tracking ? 'Lacak Lokasi Real-Time Aktif (Tap untuk Stop)' : 'Mulai Lacak Lokasi Real-Time'}
-        </Text>
-      </TouchableOpacity>
+      <View style={{ paddingHorizontal: spacing.xl, marginBottom: spacing.md }}>
+        <TouchableOpacity
+          style={[
+            styles.trackingButton,
+            {
+              backgroundColor: tracking ? colors.greenLight : colors.accentLight,
+              borderColor: tracking ? colors.green : colors.accent,
+            },
+          ]}
+          onPress={toggleTracking}
+          activeOpacity={0.8}
+          accessibilityLabel={tracking ? 'Lacak lokasi aktif' : 'Mulai lacak lokasi'}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: tracking }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Compass size={18} color={tracking ? colors.green : colors.accent} style={{ marginRight: 8 }} />
+          <Text style={[styles.trackingText, { color: tracking ? colors.green : colors.accent }]}>
+            {tracking ? t('dashboard.trackingActive') : t('dashboard.startTracking')}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Quick Navigation Row 1 */}
-      <View style={styles.navRow}>
+      {/* Quick Navigation Grid — 2 baris × 4 kolom */}
+      <View style={styles.navGrid}>
         <TouchableOpacity
           style={[styles.navBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => router.push('/route/today' as any)}
           activeOpacity={0.7}
+          accessibilityLabel={t('nav.routeMap')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
           <MapPin size={16} color={colors.accent} />
-          <Text style={[styles.navBtnText, { color: colors.text }]}>Peta Rute</Text>
+          <Text style={[styles.navBtnText, { color: colors.text }]}>{t('nav.routeMap')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.navBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => router.push('/shift' as any)}
           activeOpacity={0.7}
+          accessibilityLabel={t('nav.shift')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
           <Clock size={16} color={colors.accent} />
-          <Text style={[styles.navBtnText, { color: colors.text }]}>Shift</Text>
+          <Text style={[styles.navBtnText, { color: colors.text }]}>{t('nav.shift')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.navBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={() => router.push('/earnings')}
+          onPress={() => router.push('/earnings' as any)}
           activeOpacity={0.7}
+          accessibilityLabel={t('nav.earnings')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
           <Wallet size={16} color={colors.green} />
-          <Text style={[styles.navBtnText, { color: colors.text }]}>Pendapatan</Text>
+          <Text style={[styles.navBtnText, { color: colors.text }]}>{t('nav.earnings')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.navBtnSos, { backgroundColor: colors.errorBg, borderColor: colors.errorBorder }]}
           onPress={() => router.push('/sos')}
           activeOpacity={0.7}
+          accessibilityLabel="Tombol darurat SOS"
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
           <ShieldAlert size={16} color={colors.error} />
-          <Text style={[styles.navBtnTextSos, { color: colors.error }]}>SOS</Text>
+          <Text style={[styles.navBtnTextSos, { color: colors.error }]}>{t('nav.sos')}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Quick Navigation Row 2 */}
-      <View style={[styles.navRow, { marginTop: 0 }]}>
+      <View style={styles.navGrid}>
         <TouchableOpacity
           style={[styles.navBtnLight, { backgroundColor: colors.surfaceDark, borderColor: colors.border }]}
           onPress={() => router.push('/notifications' as any)}
           activeOpacity={0.7}
+          accessibilityLabel={t('nav.notifications')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
           <Bell size={16} color={colors.textSecondary} />
-          <Text style={[styles.navBtnText, { color: colors.text }]}>Notifikasi</Text>
+          <Text style={[styles.navBtnText, { color: colors.text }]}>{t('nav.notifications')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.navBtnLight, { backgroundColor: colors.surfaceDark, borderColor: colors.border }]}
           onPress={() => router.push('/incidents' as any)}
           activeOpacity={0.7}
+          accessibilityLabel={t('nav.incidents')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
           <AlertTriangle size={16} color={colors.warning} />
-          <Text style={[styles.navBtnText, { color: colors.text }]}>Insiden</Text>
+          <Text style={[styles.navBtnText, { color: colors.text }]}>{t('nav.incidents')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.navBtnLight, { backgroundColor: colors.surfaceDark, borderColor: colors.border }]}
-          onPress={() => router.push('/history')}
+          onPress={() => router.push('/(tabs)/history' as any)}
           activeOpacity={0.7}
+          accessibilityLabel={t('nav.history')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
           <History size={16} color={colors.textSecondary} />
-          <Text style={[styles.navBtnText, { color: colors.text }]}>Riwayat</Text>
+          <Text style={[styles.navBtnText, { color: colors.text }]}>{t('nav.history')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navBtnLight, { backgroundColor: colors.surfaceDark, borderColor: colors.border }]}
+          onPress={() => router.push('/(tabs)/stats' as any)}
+          activeOpacity={0.7}
+          accessibilityLabel={t('nav.stats')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+        >
+          <CheckCircle2 size={16} color={colors.textSecondary} />
+          <Text style={[styles.navBtnText, { color: colors.text }]}>{t('nav.stats')}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* New Delivery Offers Box */}
+      {/* New Delivery Offers */}
       {offers.length > 0 && (
         <View style={{ paddingHorizontal: spacing.xl, marginBottom: spacing.md }}>
           <View style={styles.offerHeaderTitle}>
             <PackageCheck size={18} color={colors.accent} style={{ marginRight: 6 }} />
             <Text style={{ fontSize: 14, fontWeight: '700', color: colors.accent }}>
-              Tawaran Pesanan Baru ({offers.length})
+              {t('dashboard.newOffers', { count: offers.length })}
             </Text>
           </View>
           {offers.map((offer) => {
             const remaining = timers[offer.id] ?? 45;
             return (
-              <View
+              <Animated.View
                 key={offer.id}
+                entering={StaggerFadeIn(offer.id, 50)}
                 style={[
                   styles.offerCard,
                   {
@@ -436,29 +500,36 @@ export default function DashboardScreen() {
                     onPress={() => handleRespond(offer.id, 'accept')}
                     disabled={responding[offer.id]}
                     activeOpacity={0.8}
+                    accessibilityLabel={`Terima tawaran ${offer.kode_pesanan}`}
+                    accessibilityRole="button"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <Check size={16} color={colors.white} style={{ marginRight: 4 }} />
-                    <Text style={styles.offerBtnText}>Terima</Text>
+                    <Text style={styles.offerBtnText}>{t('dashboard.accept')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.rejectBtn, { backgroundColor: colors.error }]}
                     onPress={() => handleRespond(offer.id, 'reject')}
                     disabled={responding[offer.id]}
                     activeOpacity={0.8}
+                    accessibilityLabel={`Tolak tawaran ${offer.kode_pesanan}`}
+                    accessibilityRole="button"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <X size={16} color={colors.white} style={{ marginRight: 4 }} />
-                    <Text style={styles.offerBtnText}>Tolak</Text>
+                    <Text style={styles.offerBtnText}>{t('dashboard.reject')}</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </Animated.View>
             );
           })}
         </View>
       )}
 
-      {/* Main Delivery List */}
-      <FlatList
-        data={deliveries.filter((d) => d.status !== 'Siap_Dikirim')}
+      {/* Zona 2: Main Delivery List */}
+      <FlashList
+        ref={listRef}
+        data={filteredDeliveries}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
         refreshControl={
@@ -468,57 +539,32 @@ export default function DashboardScreen() {
               setRefreshing(true);
               loadDeliveries();
             }}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <PackageCheck size={48} color={colors.textMuted} />
             <Text style={[styles.empty, { color: colors.textMuted }]}>
-              Belum ada tugas kiriman untuk hari ini
+              {t('dashboard.noDeliveries')}
             </Text>
           </View>
         }
-        renderItem={({ item }) => {
-          const badge = getStatusBadge(item.status);
-          return (
-            <TouchableOpacity
-              style={[
-                styles.card,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
-              onPress={() => goToDetail(item)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.cardHeader}>
-                <Text style={[styles.orderCode, { color: colors.textSecondary }]}>
-                  {item.kode_pesanan}
-                </Text>
-                <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                  <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
-                </View>
-              </View>
-              <Text style={[styles.customerName, { color: colors.text }]}>{item.customer_name}</Text>
-              <Text style={[styles.address, { color: colors.textSecondary }]} numberOfLines={2}>
-                {item.address}
-              </Text>
-              <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
-                <Text style={[styles.itemCount, { color: colors.textMuted }]}>
-                  {item.items.length} item barang
-                </Text>
-                {item.distance_km && (
-                  <View style={styles.distanceBadge}>
-                    <Navigation size={12} color={colors.accent} style={{ marginRight: 4 }} />
-                    <Text style={[styles.distanceText, { color: colors.accent }]}>
-                      {item.distance_km} km
-                    </Text>
-                  </View>
-                )}
-                <ChevronRight size={16} color={colors.textMuted} />
-              </View>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={({ item }) => (
+          <DeliveryCard
+            id={item.id}
+            kodePesanan={item.kode_pesanan}
+            customerName={item.customer_name}
+            address={item.address}
+            status={item.status}
+            itemsCount={item.items.length}
+            distanceKm={item.distance_km}
+            onPress={() => goToDetail(item)}
+          />
+        )}
       />
+      <FloatingSosButton />
     </SafeAreaView>
   );
 }
@@ -578,31 +624,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  statCard: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderLeftWidth: 4,
-    borderWidth: 1,
-  },
-  statIconHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 4,
-  },
   trackingButton: {
     flexDirection: 'row',
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.md,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     alignItems: 'center',
@@ -614,7 +637,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  navRow: {
+  navGrid: {
     flexDirection: 'row',
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.sm,
@@ -701,12 +724,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxl,
   },
-  card: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -718,15 +735,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
   customerName: {
     fontSize: 16,
     fontWeight: '700',
@@ -735,26 +743,6 @@ const styles = StyleSheet.create({
   address: {
     fontSize: 13,
     lineHeight: 18,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-  },
-  itemCount: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  distanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  distanceText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: 'center',

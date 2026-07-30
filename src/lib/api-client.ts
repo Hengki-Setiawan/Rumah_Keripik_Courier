@@ -178,6 +178,22 @@ export async function reportIncident(data: { type: string; severity?: string; de
   );
 }
 
+export async function getEarnings(period?: string) {
+  return request<{
+    ok: boolean;
+    earnings: Array<{ baseFee: number; bonusAmount: number; status: string; createdAt: string; orderId: string }>;
+    summary: { totalConfirmed: number; pendingTotal: number; deliveryCount: number; period: string };
+  }>(`/api/courier/earnings${period ? `?period=${period}` : ''}`);
+}
+
+export async function getDeliveryHistory(limit = 50, offset = 0, status?: string) {
+  return request<{
+    ok: boolean;
+    deliveries: CourierDeliveryDto[];
+    pagination: { total: number; limit: number; offset: number; hasMore: boolean };
+  }>(`/api/courier/deliveries/history?limit=${limit}&offset=${offset}${status ? `&status=${status}` : ''}`);
+}
+
 export async function registerPushToken(expoPushToken: string, platform?: string) {
   return request<{ ok: boolean }>(
     '/api/courier/push-tokens',

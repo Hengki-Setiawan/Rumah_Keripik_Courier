@@ -1,43 +1,40 @@
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { colors, spacing, borderRadius } from '../../theme';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { MapPin, Navigation } from 'lucide-react-native';
+import { useAppColors, spacing, borderRadius } from '../../theme';
 
 interface MapPreviewCardProps {
-  destinationLat: number;
-  destinationLng: number;
-  courierLat?: number;
-  courierLng?: number;
-  address?: string;
-  distance?: string;
-  eta?: string;
-  onPress?: () => void;
+  destinationLat?: number | string | null;
+  destinationLng?: number | string | null;
+  destinationName?: string;
+  distanceKm?: number | string | null;
+  onPress: () => void;
 }
 
-export default function MapPreviewCard({
-  destinationLat,
-  destinationLng,
-  courierLat,
-  courierLng,
-  address,
-  distance,
-  eta,
+export function MapPreviewCard({
+  destinationName,
+  distanceKm,
   onPress,
 }: MapPreviewCardProps) {
-  const staticMapUrl = Platform.select({
-    ios: `https://maps.apple.com/?daddr=${destinationLat},${destinationLng}${courierLat && courierLng ? `&saddr=${courierLat},${courierLng}` : ''}`,
-    default: `https://www.google.com/maps/dir/${courierLat && courierLng ? `${courierLat},${courierLng}/` : ''}${destinationLat},${destinationLng}`,
-  });
+  const colors = useAppColors();
 
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
       <View style={styles.mapPlaceholder}>
-        <Text style={styles.mapIcon}>🗺️</Text>
-        <Text style={styles.mapHint}>Ketuk untuk buka peta</Text>
+        <MapPin size={24} color={colors.accent} />
+        <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
+          {destinationName ?? 'Lokasi Tujuan'}
+        </Text>
       </View>
-      {address && <Text style={styles.address} numberOfLines={2}>{address}</Text>}
-      {(distance || eta) && (
-        <View style={styles.infoRow}>
-          {distance && <Text style={styles.infoText}>{distance}</Text>}
-          {eta && <Text style={styles.infoText}>ETA: {eta}</Text>}
+      {distanceKm != null && (
+        <View style={styles.footer}>
+          <Navigation size={13} color={colors.accent} style={{ marginRight: 4 }} />
+          <Text style={[styles.distance, { color: colors.accent }]}>
+            {typeof distanceKm === 'string' ? distanceKm : `${distanceKm}`} km — Tap untuk buka peta
+          </Text>
         </View>
       )}
     </TouchableOpacity>
@@ -46,39 +43,30 @@ export default function MapPreviewCard({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
   },
   mapPlaceholder: {
-    height: 140,
-    backgroundColor: colors.surfaceDark,
+    height: 100,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.03)',
   },
-  mapIcon: {
-    fontSize: 32,
-  },
-  mapHint: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  address: {
-    fontSize: 14,
-    color: colors.text,
-    padding: spacing.md,
-    paddingBottom: 0,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-  },
-  infoText: {
+  placeholderText: {
     fontSize: 13,
-    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  distance: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

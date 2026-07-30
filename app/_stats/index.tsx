@@ -17,6 +17,7 @@ import {
 import { useAppColors, spacing, borderRadius } from '../../src/theme';
 import Container from '../../src/components/Container';
 import Card from '../../src/components/Card';
+import { SkeletonCard, SkeletonStatGrid } from '../../src/components/SkeletonLoader';
 import { getStats } from '../../src/lib/api-client';
 
 interface StatsData {
@@ -43,8 +44,11 @@ export default function StatsScreen() {
     try {
       const res = await getStats(period);
       setStats(res.data);
-    } catch {
-      // silent
+    } catch (e) {
+      console.error('loadStats failed:', e);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      }
     }
     setLoading(false);
     setRefreshing(false);
@@ -64,7 +68,11 @@ export default function StatsScreen() {
   if (loading) {
     return (
       <Container>
-        <Text style={[styles.loadingText, { color: colors.textMuted }]}>Memuat statistik performa...</Text>
+        <View style={{ paddingVertical: spacing.lg }}>
+          <SkeletonCard lines={2} />
+          <SkeletonStatGrid />
+          <SkeletonCard lines={1} />
+        </View>
       </Container>
     );
   }
@@ -225,6 +233,44 @@ export default function StatsScreen() {
                   ]}
                 />
               </View>
+            </Card>
+
+            <Card style={[styles.badgesCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.badgesHeader}>
+                <Award size={20} color={colors.accent} />
+                <Text style={[styles.badgesTitle, { color: colors.textSecondary }]}>Pencapaian</Text>
+              </View>
+              <View style={styles.badgesRow}>
+                {stats.score >= 80 && (
+                  <View style={styles.badgeItem}>
+                    <Trophy size={24} color="#d9a441" />
+                    <Text style={[styles.badgeLabel, { color: colors.textMuted }]}>Top Performer</Text>
+                  </View>
+                )}
+                {stats.incidentCount === 0 && stats.totalCompleted > 0 && (
+                  <View style={styles.badgeItem}>
+                    <CheckCircle2 size={24} color={colors.green} />
+                    <Text style={[styles.badgeLabel, { color: colors.textMuted }]}>Zero Insiden</Text>
+                  </View>
+                )}
+                {stats.onTimeRate >= 90 && (
+                  <View style={styles.badgeItem}>
+                    <Clock size={24} color="#3d7ea6" />
+                    <Text style={[styles.badgeLabel, { color: colors.textMuted }]}>Tepat Waktu</Text>
+                  </View>
+                )}
+                {stats.totalCompleted >= 10 && (
+                  <View style={styles.badgeItem}>
+                    <TrendingUp size={24} color="#7f9f3e" />
+                    <Text style={[styles.badgeLabel, { color: colors.textMuted }]}>10+ Kiriman</Text>
+                  </View>
+                )}
+              </View>
+              {stats.score < 80 && stats.incidentCount > 0 && stats.totalCompleted === 0 && (
+                <Text style={[styles.badgesEmpty, { color: colors.textMuted }]}>
+                  Selesaikan pengiriman untuk membuka pencapaian
+                </Text>
+              )}
             </Card>
           </>
         )}
@@ -406,5 +452,42 @@ const styles = StyleSheet.create({
   rateFill: {
     height: '100%',
     borderRadius: 4,
+  },
+  badgesCard: {
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  badgesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: spacing.md,
+  },
+  badgesTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+  },
+  badgeItem: {
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 70,
+  },
+  badgeLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  badgesEmpty: {
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
 });

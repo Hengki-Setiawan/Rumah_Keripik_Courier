@@ -1,13 +1,28 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
-import { colors, spacing, borderRadius } from '../../src/theme';
-import { getTodayDeliveries } from '../../src/lib/api-client';
-import type { CourierDeliveryDto } from '../../src/lib/types';
+import * as Haptics from 'expo-haptics';
+import { Wallet, TrendingUp, PackageCheck } from 'lucide-react-native';
+
+import { useAppColors, spacing, borderRadius } from '../../src/theme';
+import { GlassCard } from '../../src/components/ui/GlassCard';
+import { getEarnings } from '../../src/lib/api-client';
+import { SkeletonCard, SkeletonStatGrid } from '../../src/components/SkeletonLoader';
+import { t } from '../../src/i18n';
+
+interface EarningsItem {
+  baseFee: number;
+  bonusAmount: number;
+  status: string;
+  createdAt: string;
+  orderId: string;
+}
 
 export default function EarningsScreen() {
-  const [deliveries, setDeliveries] = useState<CourierDeliveryDto[]>([]);
+  const colors = useAppColors();
+  const [earnings, setEarnings] = useState<EarningsItem[]>([]);
+  const [summary, setSummary] = useState({ totalConfirmed: 0, pendingTotal: 0, deliveryCount: 0, period: 'daily' });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -15,72 +30,104 @@ export default function EarningsScreen() {
 
   async function loadData() {
     try {
-      const data = await getTodayDeliveries();
-      setDeliveries(data.deliveries || []);
-    } catch {}
+      const res = await getEarnings();
+      setEarnings(res.earnings || []);
+      setSummary(res.summary || { totalConfirmed: 0, pendingTotal: 0, deliveryCount: 0, period: 'daily' });
+    } catch (e) {
+      console.error('loadEarnings failed:', e);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      }
+    }
     setLoading(false);
     setRefreshing(false);
   }
 
-  const completed = deliveries.filter((d) => d.status === 'Terkirim');
-  const failed = deliveries.filter((d) => d.status === 'Gagal');
-  const totalEarnings = completed.reduce((sum, d) => {
-    const itemTotal = d.items.reduce((s, item) => s + item.price * item.quantity, 0);
-    const fee = Math.round(itemTotal * 0.1);
-    return sum + Math.max(fee, 5000);
-  }, 0);
-
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color={colors.accent} style={{ flex: 1 }} />
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+        <View style={{ padding: spacing.xl }}>
+          <SkeletonCard lines={2} />
+          <SkeletonStatGrid />
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: 'Pendapatan Saya' }} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: t('earnings.title'),
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+        }}
+      />
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.accent} colors={[colors.accent]} />}
       >
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Pendapatan Hari Ini</Text>
-          <Text style={styles.summaryAmount}>Rp {totalEarnings.toLocaleString('id-ID')}</Text>
+        <GlassCard style={styles.summaryCard}>
+          <Wallet size={24} color={colors.accent} style={{ marginBottom: spacing.sm }} />
+          <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>{t('earnings.today')}</Text>
+          <Text style={[styles.summaryAmount, { color: colors.accent }]}>Rp {summary.totalConfirmed.toLocaleString('id-ID')}</Text>
+          {summary.pendingTotal > 0 && (
+            <Text style={[styles.pendingHint, { color: colors.textMuted }]}>
+              + Rp {summary.pendingTotal.toLocaleString('id-ID')} menunggu konfirmasi
+            </Text>
+          )}
           <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryItemValue}>{completed.length}</Text>
-              <Text style={styles.summaryItemLabel}>Terkirim</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryItemValue, { color: colors.error }]}>{failed.length}</Text>
-              <Text style={styles.summaryItemLabel}>Gagal</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryItemValue}>{deliveries.length}</Text>
-              <Text style={styles.summaryItemLabel}>Total Tugas</Text>
-            </View>
+            <GlassCard noPadding>
+              <View style={styles.statCardContent}>
+                <PackageCheck size={16} color={colors.green} />
+                <Text style={[styles.statValue, { color: colors.green }]}>{summary.deliveryCount}</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('dashboard.completed')}</Text>
+              </View>
+            </GlassCard>
+            <GlassCard noPadding>
+              <View style={styles.statCardContent}>
+                <TrendingUp size={16} color={colors.accent} />
+                <Text style={[styles.statValue, { color: colors.accent }]}>{earnings.length}</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('earnings.totalTasks')}</Text>
+              </View>
+            </GlassCard>
           </View>
-        </View>
+        </GlassCard>
 
-        <Text style={styles.sectionTitle}>Riwayat Detail</Text>
-        {completed.length === 0 ? (
-          <View style={styles.card}>
-            <Text style={styles.emptyText}>Belum ada pengiriman selesai hari ini</Text>
-          </View>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('earnings.detailHistory')}</Text>
+        {earnings.length === 0 ? (
+          <GlassCard noPadding>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>{t('earnings.empty')}</Text>
+          </GlassCard>
         ) : (
-          completed.map((d) => {
-            const itemTotal = d.items.reduce((s, item) => s + item.price * item.quantity, 0);
-            const fee = Math.max(Math.round(itemTotal * 0.1), 5000);
+          earnings.map((e, i) => {
+            const total = e.baseFee + e.bonusAmount;
             return (
-              <TouchableOpacity key={d.id} style={styles.card} onPress={() => router.push(`/delivery/${d.id}`)}>
-                <View style={styles.row}>
-                  <Text style={styles.orderCode}>{d.kode_pesanan}</Text>
-                  <Text style={styles.amount}>Rp {fee.toLocaleString('id-ID')}</Text>
-                </View>
-                <Text style={styles.customerName}>{d.customer_name}</Text>
-                <Text style={styles.itemSummary}>{d.items.map((i) => `${i.name} x${i.quantity}`).join(', ')}</Text>
+              <TouchableOpacity
+                key={e.orderId || i}
+                onPress={() => {}}
+              >
+                <GlassCard noPadding>
+                  <View style={styles.cardInner}>
+                    <View style={styles.row}>
+                      <Text style={[styles.orderCode, { color: colors.textSecondary }]}>
+                        {e.orderId.slice(0, 10)}
+                      </Text>
+                      <Text style={[styles.amount, { color: e.status === 'confirmed' ? colors.green : colors.textMuted }]}>
+                        Rp {total.toLocaleString('id-ID')}
+                      </Text>
+                    </View>
+                    {e.bonusAmount > 0 && (
+                      <Text style={[styles.bonusText, { color: colors.accent }]}>
+                        + Bonus Rp {e.bonusAmount.toLocaleString('id-ID')}
+                      </Text>
+                    )}
+                    <Text style={[styles.statusBadge, { color: colors.textMuted }]}>
+                      {e.status === 'confirmed' ? 'Dikonfirmasi' : e.status === 'paid_out' ? 'Dibayar' : 'Menunggu'}
+                    </Text>
+                  </View>
+                </GlassCard>
               </TouchableOpacity>
             );
           })
@@ -91,67 +138,58 @@ export default function EarningsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
+  container: { flex: 1 },
   scroll: {
     padding: spacing.xl,
     paddingBottom: spacing.xxl + 20,
   },
   summaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   summaryLabel: {
     fontSize: 13,
-    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   summaryAmount: {
     fontSize: 36,
     fontWeight: '800',
-    color: colors.accent,
     marginVertical: spacing.md,
+  },
+  pendingHint: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: spacing.md,
   },
   summaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    gap: spacing.sm,
     width: '100%',
-    marginTop: spacing.sm,
-  },
-  summaryItem: {
-    alignItems: 'center',
-  },
-  summaryItemValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  summaryItemLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.text,
     marginBottom: spacing.md,
   },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+  cardInner: {
     padding: spacing.lg,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+  },
+  statCardContent: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    gap: spacing.xs,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   row: {
     flexDirection: 'row',
@@ -162,27 +200,23 @@ const styles = StyleSheet.create({
   orderCode: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.textSecondary,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   amount: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.green,
   },
-  customerName: {
-    fontSize: 14,
+  bonusText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
     marginBottom: 2,
   },
-  itemSummary: {
-    fontSize: 12,
-    color: colors.textMuted,
+  statusBadge: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   emptyText: {
     textAlign: 'center',
-    color: colors.textMuted,
     fontSize: 14,
     paddingVertical: spacing.lg,
   },

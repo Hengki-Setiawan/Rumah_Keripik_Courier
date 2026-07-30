@@ -1,38 +1,55 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, borderRadius } from '../../theme';
+import { useAppColors, spacing, borderRadius } from '../../theme';
 
 interface StatCardProps {
   value: string | number;
   label: string;
   color?: string;
+  icon?: React.ReactNode;
 }
 
-export default function StatCard({ value, label, color }: StatCardProps) {
+export function StatCard({ value, label, color, icon }: StatCardProps) {
+  const colors = useAppColors();
+  const accentColor = color ?? colors.accent;
+
   return (
-    <View style={[styles.card, color ? { borderLeftColor: color, borderLeftWidth: 3 } : undefined]}>
-      <Text style={[styles.value, color ? { color } : undefined]}>{value}</Text>
-      <Text style={styles.label}>{label}</Text>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderLeftColor: accentColor,
+        },
+      ]}
+    >
+      {icon && <View style={styles.iconWrap}>{icon}</View>}
+      <Text style={[styles.value, { color: accentColor }]}>{value}</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    flex: 1,
     borderRadius: borderRadius.md,
     padding: spacing.md,
+    borderWidth: 1,
+    borderLeftWidth: 3,
     alignItems: 'center',
-    minWidth: 80,
+    gap: 4,
+  },
+  iconWrap: {
+    marginBottom: 2,
   },
   value: {
     fontSize: 22,
-    fontWeight: '700',
-    color: colors.text,
+    fontWeight: '800',
   },
   label: {
     fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
+    fontWeight: '600',
     textAlign: 'center',
   },
 });

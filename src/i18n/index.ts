@@ -1,15 +1,27 @@
-import * as Localization from 'expo-localization';
+import { getLocales } from 'expo-localization';
 import id from './id.json';
 import en from './en.json';
 
-export type TranslationKey = keyof typeof id;
+type TranslationKey = keyof typeof id;
 
-const locales: Record<string, Record<string, string>> = { id, en };
+const translations: Record<string, Record<TranslationKey, string>> = { id, en };
 
-let currentLocale: string = 'id';
+const defaultLocale = 'id';
+
+function getDeviceLocale(): string {
+  try {
+    const locales = getLocales();
+    const lang = locales?.[0]?.languageCode ?? defaultLocale;
+    return translations[lang] ? lang : defaultLocale;
+  } catch {
+    return defaultLocale;
+  }
+}
+
+let currentLocale: string = getDeviceLocale();
 
 export function setLocale(locale: string) {
-  if (locales[locale]) {
+  if (translations[locale]) {
     currentLocale = locale;
   }
 }
@@ -18,26 +30,11 @@ export function getLocale(): string {
   return currentLocale;
 }
 
-export function detectLocale(): string {
-  const locales = Localization.getLocales();
-  const lang = locales[0]?.languageCode || 'id';
-  return lang === 'en' ? 'en' : 'id';
-}
-
-export function t(key: string, params?: Record<string, string | number>): string {
-  const translation = (locales[currentLocale] as Record<string, string>)?.[key];
-  if (!translation) return key;
-
-  if (params) {
-    return Object.entries(params).reduce(
-      (str, [k, v]) => str.replace(`{${k}}`, String(v)),
-      translation
-    );
-  }
-
-  return translation;
-}
-
-export function useT() {
-  return { t, setLocale, getLocale, currentLocale };
+export function t(key: TranslationKey, params?: Record<string, string | number>): string {
+  const text = translations[currentLocale]?.[key] ?? translations[defaultLocale][key] ?? key;
+  if (!params) return text;
+  return text.replace(/\{(\w+)\}/g, (_, k) => {
+    const v = params[k];
+    return v != null ? String(v) : `{${k}}`;
+  });
 }

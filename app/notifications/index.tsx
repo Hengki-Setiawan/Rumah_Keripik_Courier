@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
-import { colors, spacing, borderRadius } from '../../src/theme';
+import * as Haptics from 'expo-haptics';
+import { Bell } from 'lucide-react-native';
+import { FlashList } from '@shopify/flash-list';
+
+import { useAppColors, spacing, borderRadius } from '../../src/theme';
+import { GlassCard } from '../../src/components/ui/GlassCard';
 import Container from '../../src/components/Container';
-import Card from '../../src/components/Card';
-import Button from '../../src/components/Button';
 import { getNotifications, markNotificationRead } from '../../src/lib/api-client';
+import { t } from '../../src/i18n';
 
 interface NotifItem {
   id: number;
@@ -18,6 +22,7 @@ interface NotifItem {
 }
 
 export default function NotificationsScreen() {
+  const colors = useAppColors();
   const [notifs, setNotifs] = useState<NotifItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -29,7 +34,7 @@ export default function NotificationsScreen() {
       setNotifs(res.data.notifications as unknown as NotifItem[]);
       setUnreadCount(res.data.unreadCount);
     } catch {
-      Alert.alert('Gagal memuat notifikasi');
+      Alert.alert(t('common.failed'), t('notification.loadFailed'));
     }
     setLoading(false);
     setRefreshing(false);
@@ -47,10 +52,10 @@ export default function NotificationsScreen() {
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
     const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1) return 'Baru saja';
-    if (diffMin < 60) return `${diffMin}m lalu`;
+    if (diffMin < 1) return t('notification.justNow');
+    if (diffMin < 60) return t('notification.minAgo', { count: diffMin });
     const diffHour = Math.floor(diffMin / 60);
-    if (diffHour < 24) return `${diffHour}j lalu`;
+    if (diffHour < 24) return t('notification.hourAgo', { count: diffHour });
     return d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
   };
 
@@ -58,26 +63,29 @@ export default function NotificationsScreen() {
     <Container>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>{'< Kembali'}</Text>
+          <Text style={[styles.back, { color: colors.accent }]}>{'< '}{t('common.back')}</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Notifikasi</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t('notification.title')}</Text>
         {unreadCount > 0 && (
           <TouchableOpacity onPress={() => handleMarkRead()}>
-            <Text style={styles.markAll}>Baca Semua</Text>
+            <Text style={[styles.markAll, { color: colors.accent }]}>{t('notification.markAllRead')}</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <FlatList
+      <FlashList
         data={notifs}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadNotifications(); }} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadNotifications(); }} tintColor={colors.accent} colors={[colors.accent]} />}
         ListEmptyComponent={
           loading ? (
-            <Text style={styles.empty}>Memuat...</Text>
+            <Text style={[styles.empty, { color: colors.textMuted }]}>{t('common.loading')}</Text>
           ) : (
-            <Text style={styles.empty}>Tidak ada notifikasi</Text>
+            <View style={styles.emptyContainer}>
+              <Bell size={40} color={colors.textMuted} />
+              <Text style={[styles.empty, { color: colors.textMuted }]}>{t('notification.empty')}</Text>
+            </View>
           )
         }
         renderItem={({ item }) => (
@@ -86,15 +94,23 @@ export default function NotificationsScreen() {
               if (!item.isRead) handleMarkRead(item.id);
               if (item.linkUrl) router.push(item.linkUrl as any);
             }}
+            activeOpacity={0.8}
           >
-            <Card style={!item.isRead ? styles.unreadCard : undefined} accentColor={!item.isRead ? colors.accent : undefined}>
-              <View style={styles.notifHeader}>
-                <Text style={[styles.notifTitle, !item.isRead && styles.unreadTitle]}>{item.title}</Text>
-                <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
+            <GlassCard noPadding>
+              <View style={[
+                styles.notifCard,
+                { backgroundColor: item.isRead ? 'transparent' : colors.accentLight },
+              ]}>
+                <View style={styles.notifHeader}>
+                  <Text style={[styles.notifTitle, { color: colors.text }, !item.isRead && styles.unreadTitle]}>
+                    {item.title}
+                  </Text>
+                  <Text style={[styles.notifTime, { color: colors.textMuted }]}>{formatTime(item.createdAt)}</Text>
+                </View>
+                <Text style={[styles.notifBody, { color: colors.textSecondary }]}>{item.body}</Text>
+                {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />}
               </View>
-              <Text style={styles.notifBody}>{item.body}</Text>
-              {!item.isRead && <View style={styles.unreadDot} />}
-            </Card>
+            </GlassCard>
           </TouchableOpacity>
         )}
       />
@@ -110,26 +126,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   back: {
-    color: colors.accent,
     fontSize: 14,
     fontWeight: '600',
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
   },
   markAll: {
-    color: colors.accent,
     fontSize: 12,
     fontWeight: '600',
   },
   list: {
     paddingBottom: spacing.xxl,
-  },
-  unreadCard: {
-    backgroundColor: '#fffbeb',
-    borderColor: '#fde68a',
   },
   notifHeader: {
     flexDirection: 'row',
@@ -140,21 +149,17 @@ const styles = StyleSheet.create({
   notifTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
     flex: 1,
   },
   unreadTitle: {
     fontWeight: '700',
-    color: '#92400e',
   },
   notifTime: {
     fontSize: 11,
-    color: colors.textMuted,
     marginLeft: spacing.sm,
   },
   notifBody: {
     fontSize: 13,
-    color: colors.textSecondary,
     lineHeight: 18,
   },
   unreadDot: {
@@ -164,12 +169,21 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.accent,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 12,
   },
   empty: {
     textAlign: 'center',
-    color: colors.textMuted,
-    marginTop: 60,
     fontSize: 16,
+  },
+  notifCard: {
+    padding: spacing.lg,
+    marginBottom: spacing.sm,
+    position: 'relative',
+    borderRadius: borderRadius.lg,
   },
 });

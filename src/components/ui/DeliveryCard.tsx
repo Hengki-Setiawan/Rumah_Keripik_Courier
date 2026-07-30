@@ -1,47 +1,82 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, spacing, borderRadius } from '../../theme';
-import StatusBadge from './StatusBadge';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { MapPin, Navigation, ChevronRight } from 'lucide-react-native';
+import { useAppColors, spacing, borderRadius } from '../../theme';
 
 interface DeliveryCardProps {
-  id: number;
+  id: string | number;
+  kodePesanan: string;
   customerName: string;
   address: string;
   status: string;
-  isCod?: boolean;
-  codAmount?: number;
-  distance?: string;
-  routeOrder?: number;
-  onPress?: () => void;
+  itemsCount?: number;
+  distanceKm?: number | string | null;
+  urgency?: 'critical' | 'urgent' | 'normal' | 'idle';
+  onPress: () => void;
 }
 
-export default function DeliveryCard({
-  customerName, address, status, isCod, codAmount, distance, routeOrder, onPress,
+const statusConfig: Record<string, { label: string; bg: string; color: string }> = {
+  Siap_Dikirim: { label: 'Siap Dikirim', bg: 'rgba(61,126,166,0.12)', color: '#3d7ea6' },
+  Dalam_Pengiriman: { label: 'Dalam Perjalanan', bg: 'rgba(197,90,43,0.12)', color: '#c55a2b' },
+  Terkirim: { label: 'Terkirim', bg: 'rgba(127,159,62,0.12)', color: '#7f9f3e' },
+  Gagal: { label: 'Gagal', bg: 'rgba(192,57,43,0.12)', color: '#c0392b' },
+};
+
+export function DeliveryCard({
+  kodePesanan,
+  customerName,
+  address,
+  status,
+  itemsCount,
+  distanceKm,
+  urgency,
+  onPress,
 }: DeliveryCardProps) {
-  const isActive = status === 'Dalam_Pengiriman' || status === 'in_transit';
+  const colors = useAppColors();
+  const badge = statusConfig[status] ?? { label: status, bg: colors.surfaceDark, color: colors.textMuted };
+
+  const urgencyColor = urgency === 'critical' ? colors.error
+    : urgency === 'urgent' ? colors.warning
+    : undefined;
 
   return (
     <TouchableOpacity
-      style={[styles.card, isActive && styles.cardActive]}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: urgencyColor ?? colors.border,
+          borderLeftColor: urgencyColor ?? colors.border,
+          borderLeftWidth: urgencyColor ? 4 : 1,
+        },
+      ]}
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
     >
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          {routeOrder != null && (
-            <View style={styles.orderBadge}>
-              <Text style={styles.orderText}>{routeOrder}</Text>
-            </View>
-          )}
-          <Text style={styles.name} numberOfLines={1}>{customerName}</Text>
+      <View style={styles.cardHeader}>
+        <Text style={[styles.orderCode, { color: colors.textSecondary }]}>{kodePesanan}</Text>
+        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+          <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
         </View>
-        <StatusBadge status={status} />
       </View>
-      <Text style={styles.address} numberOfLines={2}>{address}</Text>
-      <View style={styles.footer}>
-        {distance && <Text style={styles.distance}>{distance}</Text>}
-        {isCod && codAmount != null && (
-          <Text style={styles.cod}>COD: Rp {codAmount.toLocaleString('id-ID')}</Text>
+      <Text style={[styles.customerName, { color: colors.text }]}>{customerName}</Text>
+      <Text style={[styles.address, { color: colors.textSecondary }]} numberOfLines={2}>
+        {address}
+      </Text>
+      <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+        {itemsCount != null && (
+          <Text style={[styles.itemCount, { color: colors.textMuted }]}>
+            {itemsCount} item barang
+          </Text>
         )}
+        {distanceKm != null && (
+          <View style={styles.distanceBadge}>
+            <Navigation size={12} color={colors.accent} style={{ marginRight: 4 }} />
+            <Text style={[styles.distanceText, { color: colors.accent }]}>
+              {typeof distanceKm === 'string' ? parseFloat(distanceKm).toFixed(2) : distanceKm} km
+            </Text>
+          </View>
+        )}
+        <ChevronRight size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
       </View>
     </TouchableOpacity>
   );
@@ -49,64 +84,58 @@ export default function DeliveryCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: 16,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
   },
-  cardActive: {
-    borderColor: colors.accent,
-    borderWidth: 2,
-  },
-  header: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.xs,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  orderBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orderText: {
-    color: '#fff',
+  orderCode: {
     fontSize: 12,
+    fontFamily: 'monospace',
+    fontWeight: '600',
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  badgeText: {
+    fontSize: 11,
     fontWeight: '700',
   },
-  name: {
+  customerName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    flex: 1,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   address: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: spacing.sm,
   },
-  footer: {
+  cardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: spacing.sm,
   },
-  distance: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  cod: {
+  itemCount: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.accent,
+  },
+  distanceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  distanceText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

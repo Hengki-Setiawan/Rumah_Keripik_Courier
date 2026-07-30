@@ -1,8 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
 import {
   ArrowLeft,
@@ -23,10 +23,13 @@ import {
   ExternalLink,
   Layers,
   ChevronRight,
+
 } from 'lucide-react-native';
 
 import { useAppColors, spacing, borderRadius } from '../../src/theme';
 import { getTodayRoute } from '../../src/lib/api-client';
+import { GlassCard } from '../../src/components/ui/GlassCard';
+import { GlassBottomSheet } from '../../src/components/ui/GlassBottomSheet';
 import OfflineBanner from '../../src/components/OfflineBanner';
 
 interface RouteStop {
@@ -40,17 +43,23 @@ interface RouteStop {
 
 export default function RouteTodayScreen() {
   const colors = useAppColors();
+  const sheetRef = useRef<any>(null);
   const [waypoints, setWaypoints] = useState<RouteStop[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [totalDeliveries, setTotalDeliveries] = useState(0);
+  const [selectedStop, setSelectedStop] = useState<RouteStop | null>(null);
 
   async function loadRoute() {
     try {
       const data = await getTodayRoute();
       setWaypoints(data.waypoints || []);
       setTotalDeliveries(data.total_deliveries || 0);
-    } catch {
+    } catch (e) {
+      console.error('loadRoute failed:', e);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      }
       setWaypoints([]);
     }
     setLoading(false);
@@ -124,13 +133,8 @@ export default function RouteTodayScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      {/* Summary Card */}
-      <View
-        style={[
-          styles.summaryCard,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
+      {/* Summary Card — GlassCard */}
+      <GlassCard style={styles.summaryCard}>
         <View style={styles.summaryTopRow}>
           <Compass size={24} color={colors.accent} />
           <Text style={[styles.summaryNumber, { color: colors.accent }]}>
@@ -158,7 +162,7 @@ export default function RouteTodayScreen() {
               )} km estimasi total jarak`
             : ''}
         </Text>
-      </View>
+      </GlassCard>
 
       {/* Action Row: Re-Optimize & Multi-Stop Open */}
       <View style={styles.actionGrid}>
@@ -167,13 +171,26 @@ export default function RouteTodayScreen() {
             styles.actionBtn,
             { backgroundColor: colors.accentLight, borderColor: colors.accent },
           ]}
-          onPress={() => {
+          onPress={async () => {
             if (Platform.OS !== 'web') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
             }
-            Alert.alert('Optimasi Rute', 'Mengurutkan ulang titik rute secara teroptimasi...', [
-              { text: 'OK' },
-            ]);
+            try {
+              const token = await (await import('../../src/lib/storage')).getToken();
+              const res = await fetch('https://rumah-keripik.vercel.app/api/courier/route/optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
+                body: JSON.stringify({}),
+              });
+              const json = await res.json();
+              if (json.ok) {
+                Alert.alert('Optimasi Berhasil', 'Rute telah dioptimasi ulang.');
+              } else {
+                Alert.alert('Optimasi Gagal', json.error || 'Coba lagi nanti');
+              }
+            } catch {
+              Alert.alert('Gagal', 'Tidak dapat mengoptimasi rute, cek koneksi Anda');
+            }
             loadRoute();
           }}
           activeOpacity={0.8}
@@ -202,7 +219,7 @@ export default function RouteTodayScreen() {
       </View>
 
       {/* Waypoints Destinations List */}
-      <FlatList
+      <FlashList
         data={destinations}
         keyExtractor={(item, i) => item.id_transaksi || String(i)}
         contentContainerStyle={styles.list}
@@ -213,6 +230,8 @@ export default function RouteTodayScreen() {
               setRefreshing(true);
               loadRoute();
             }}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
         ListEmptyComponent={
@@ -241,74 +260,126 @@ export default function RouteTodayScreen() {
 
           return (
             <TouchableOpacity
-              style={[
-                styles.stopCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
               onPress={() => {
-                if (item.id_transaksi) {
-                  router.push(`/delivery/${item.id_transaksi.split('-')[0]}`);
-                } else {
-                  openInGoogleMaps(item);
-                }
+                setSelectedStop(item);
+                sheetRef.current?.snapToIndex(1);
               }}
               activeOpacity={0.85}
             >
-              <View style={styles.stopHeader}>
-                {/* Sequenced Badge Icon */}
-                <View
-                  style={[
-                    styles.stopNumber,
-                    { backgroundColor: colors.accent },
-                  ]}
-                >
-                  <Text style={styles.stopNumberText}>#{index + 1}</Text>
-                </View>
+              <GlassCard noPadding>
+                <View style={styles.stopCardInner}>
+                  <View style={styles.stopHeader}>
+                    <View
+                      style={[
+                        styles.stopNumber,
+                        { backgroundColor: colors.accent },
+                      ]}
+                    >
+                      <Text style={styles.stopNumberText}>#{index + 1}</Text>
+                    </View>
 
-                <View style={{ flex: 1, marginLeft: spacing.md }}>
-                  <Text style={[styles.stopName, { color: colors.text }]} numberOfLines={1}>
-                    {item.name || `Tujuan #${index + 1}`}
-                  </Text>
-                  {item.id_transaksi && (
-                    <Text style={[styles.stopId, { color: colors.textMuted }]}>
-                      Resi: #{item.id_transaksi.slice(0, 10)}
+                    <View style={{ flex: 1, marginLeft: spacing.md }}>
+                      <Text style={[styles.stopName, { color: colors.text }]} numberOfLines={1}>
+                        {item.name || `Tujuan #${index + 1}`}
+                      </Text>
+                      {item.id_transaksi && (
+                        <Text style={[styles.stopId, { color: colors.textMuted }]}>
+                          Resi: #{item.id_transaksi.slice(0, 10)}
+                        </Text>
+                      )}
+                    </View>
+
+                    <View style={styles.directNavButtons}>
+                      <TouchableOpacity
+                        style={[styles.smallNavBtn, { backgroundColor: colors.accentLight }]}
+                        onPress={() => openInGoogleMaps(item)}
+                        activeOpacity={0.7}
+                        aria-label="Google Maps"
+                      >
+                        <Navigation size={15} color={colors.accent} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.smallNavBtn, { backgroundColor: colors.greenLight }]}
+                        onPress={() => openInWaze(item)}
+                        activeOpacity={0.7}
+                        aria-label="Waze"
+                      >
+                        <ExternalLink size={15} color={colors.green} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.distanceFooter}>
+                    <MapPin size={13} color={colors.textMuted} style={{ marginRight: 4 }} />
+                    <Text style={[styles.distance, { color: colors.textMuted }]}>
+                      {distKm > 0 ? `${distKm} km dari titik sebelumnya` : 'Titik Awal Gudang'}
                     </Text>
-                  )}
+                    <ChevronRight size={14} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
+                  </View>
                 </View>
-
-                {/* Direct Launch Buttons */}
-                <View style={styles.directNavButtons}>
-                  <TouchableOpacity
-                    style={[styles.smallNavBtn, { backgroundColor: colors.accentLight }]}
-                    onPress={() => openInGoogleMaps(item)}
-                    activeOpacity={0.7}
-                    aria-label="Google Maps"
-                  >
-                    <Navigation size={15} color={colors.accent} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.smallNavBtn, { backgroundColor: colors.greenLight }]}
-                    onPress={() => openInWaze(item)}
-                    activeOpacity={0.7}
-                    aria-label="Waze"
-                  >
-                    <ExternalLink size={15} color={colors.green} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.distanceFooter}>
-                <MapPin size={13} color={colors.textMuted} style={{ marginRight: 4 }} />
-                <Text style={[styles.distance, { color: colors.textMuted }]}>
-                  {distKm > 0 ? `${distKm} km dari titik tujuan sebelumnya` : 'Titik Awal Toko / Gudang'}
-                </Text>
-                <ChevronRight size={14} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
-              </View>
+              </GlassCard>
             </TouchableOpacity>
           );
         }}
       />
+
+      {/* Glass Bottom Sheet — Interactive Detail Panel */}
+      <GlassBottomSheet snapPoints={['20%', '55%', '90%']} title={selectedStop?.name}>
+        {selectedStop && (
+          <>
+            <View style={styles.sheetHeader}>
+              <View style={[styles.sheetNumberBadge, { backgroundColor: colors.accent }]}>
+                <Text style={styles.sheetNumberText}>
+                  #{destinations.findIndex(d => d.lat === selectedStop.lat && d.lng === selectedStop.lng) + 1}
+                </Text>
+              </View>
+              <Text style={[styles.sheetTitle, { color: colors.text }]} numberOfLines={1}>
+                {selectedStop.name || 'Tujuan'}
+              </Text>
+            </View>
+
+            {selectedStop.id_transaksi && (
+              <Text style={[styles.sheetResi, { color: colors.textMuted }]}>
+                Resi: #{selectedStop.id_transaksi}
+              </Text>
+            )}
+
+            <View style={styles.sheetActionRow}>
+              <TouchableOpacity
+                style={[styles.sheetActionBtn, { backgroundColor: colors.info }]}
+                onPress={() => openInGoogleMaps(selectedStop)}
+                activeOpacity={0.8}
+              >
+                <Navigation size={18} color="#fff" />
+                <Text style={styles.sheetActionText}>Google Maps</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sheetActionBtn, { backgroundColor: colors.green }]}
+                onPress={() => openInWaze(selectedStop)}
+                activeOpacity={0.8}
+              >
+                <ExternalLink size={18} color="#fff" />
+                <Text style={styles.sheetActionText}>Waze</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedStop.id_transaksi && (
+              <TouchableOpacity
+                style={[styles.sheetDetailBtn, { borderColor: colors.border }]}
+                onPress={() => router.push(`/delivery/${selectedStop.id_transaksi!.split('-')[1]}`)}
+                activeOpacity={0.8}
+              >
+                <ChevronRight size={16} color={colors.accent} />
+                <Text style={[styles.sheetDetailText, { color: colors.accent }]}>
+                  Lihat Detail Pengiriman
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </GlassBottomSheet>
     </SafeAreaView>
   );
 }
@@ -342,8 +413,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.lg,
     marginHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
     marginBottom: spacing.md,
   },
   summaryTopRow: {
@@ -389,11 +458,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxl,
   },
-  stopCard: {
-    borderRadius: borderRadius.lg,
+  stopCardInner: {
     padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
   },
   stopHeader: {
     flexDirection: 'row',
@@ -453,5 +519,66 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 15,
     fontWeight: '500',
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  sheetNumberBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetNumberText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    flex: 1,
+  },
+  sheetResi: {
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: spacing.md,
+  },
+  sheetActionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  sheetActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  sheetActionText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  sheetDetailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  sheetDetailText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
