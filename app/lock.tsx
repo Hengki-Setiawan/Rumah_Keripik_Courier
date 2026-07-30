@@ -100,7 +100,7 @@ export default function LockScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.icon}>
-          {step === 'unlock' ? '🔒' : '🔐'}
+          {step === 'unlock' ? '' : '🔐'}
         </Text>
         <Text style={styles.title}>
           {step === 'initial' ? 'Amankan Aplikasi' :

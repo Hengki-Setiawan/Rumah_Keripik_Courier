@@ -95,7 +95,7 @@ export default function ProofScreen() {
       <Stack.Screen options={{ headerShown: true, title: 'Bukti Pengiriman' }} />
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>📸 Dokumentasi Pengiriman</Text>
+        <Text style={styles.title}> Dokumentasi Pengiriman</Text>
         <Text style={styles.subtitle}>Ambil foto barang yang sudah sampai ke pelanggan</Text>
 
         {photoUri ? (
@@ -108,7 +108,7 @@ export default function ProofScreen() {
         ) : (
           <View style={styles.photoButtons}>
             <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
-              <Text style={styles.photoButtonIcon}>📷</Text>
+              <Text style={styles.photoButtonIcon}></Text>
               <Text style={styles.photoButtonText}>Ambil Foto</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.photoButton} onPress={pickFromGallery}>
@@ -129,7 +129,7 @@ export default function ProofScreen() {
             </View>
           ) : (
             <TouchableOpacity style={styles.signatureButton} onPress={() => setShowSignature(true)}>
-              <Text style={styles.signatureButtonIcon}>✍️</Text>
+              <Text style={styles.signatureButtonIcon}></Text>
               <Text style={styles.signatureButtonText}>Minta Tanda Tangan</Text>
             </TouchableOpacity>
           )}
@@ -183,7 +183,7 @@ export default function ProofScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.submitText}>✅ Konfirmasi Berhasil Antar</Text>
+            <Text style={styles.submitText}> Konfirmasi Berhasil Antar</Text>
           )}
         </TouchableOpacity>
 

@@ -8,7 +8,7 @@ import { reportIncident } from '../../src/lib/api-client';
 import * as Location from 'expo-location';
 
 const INCIDENT_TYPES = [
-  { id: 'kecelakaan', label: 'Kecelakaan', icon: '⚠️', severity: 'high' },
+  { id: 'kecelakaan', label: 'Kecelakaan', icon: '', severity: 'high' },
   { id: 'kendaraan_mogok', label: 'Kendaraan Mogok', icon: '🔧', severity: 'high' },
   { id: 'cuaca_ekstrem', label: 'Cuaca Ekstrem', icon: '🌧️', severity: 'medium' },
   { id: 'keamanan', label: 'Keamanan', icon: '🔒', severity: 'emergency' },
