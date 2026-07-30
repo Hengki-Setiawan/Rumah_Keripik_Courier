@@ -11,7 +11,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.hengkisetiawan.rumahkeripikcourier",
       "infoPlist": {
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -40,18 +42,28 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-status-bar",
-      ["expo-location", {
-        "locationAlwaysAndWhenInUsePermission": "Akses lokasi untuk melacak pengiriman.",
-        "locationWhenInUsePermission": "Akses lokasi untuk melacak pengiriman.",
-        "isAndroidForegroundServiceEnabled": true,
-        "isAndroidBackgroundLocationEnabled": true
-      }],
-      ["expo-image-picker", {
-        "cameraPermission": "Izinkan akses kamera untuk foto bukti pengiriman."
-      }],
-      ["expo-notifications", {
-        "color": "#c55a2b"
-      }]
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Akses lokasi untuk melacak pengiriman.",
+          "locationWhenInUsePermission": "Akses lokasi untuk melacak pengiriman.",
+          "isAndroidForegroundServiceEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Izinkan akses kamera untuk foto bukti pengiriman."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#c55a2b"
+        }
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true
