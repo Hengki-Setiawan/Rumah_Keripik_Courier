@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { router, Stack } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius } from '../src/theme';
-import { login, bindDevice } from '../src/lib/api-client';
+import { login } from '../src/lib/api-client';
 import { saveToken, saveCourierData } from '../src/lib/storage';
-import { requestLocationPermissions } from '../src/lib/location';
-import * as Device from 'expo-device';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
@@ -13,72 +12,69 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
-    if (phone.length < 10) {
-      return Alert.alert('Error', 'Nomor telepon tidak valid');
-    }
-    if (pin.length < 4 || pin.length > 6) {
-      return Alert.alert('Error', 'PIN harus 4-6 digit');
+    if (phone.length < 10 || pin.length < 4) {
+      Alert.alert('Error', 'Nomor HP dan PIN wajib diisi');
+      return;
     }
 
     setLoading(true);
     try {
-      const data = await login(phone, pin);
-      const token = data.accessToken || data.token;
+      const result = await login(phone, pin);
+      const token = result.accessToken || result.token;
       if (!token) {
-        throw new Error('Token autentikasi tidak ditemukan dari server');
+        Alert.alert('Login Gagal', 'Token tidak diterima dari server');
+        return;
       }
+
       await saveToken(token);
-      await saveCourierData(data.courier);
-
-      try {
-        const deviceId = Device.deviceName || `${Device.osName}-${Device.osVersion}`;
-        await bindDevice(deviceId);
-      } catch {}
-
-      const hasLocation = await requestLocationPermissions();
-      if (!hasLocation) {
-        Alert.alert('Info', 'Aktifkan izin lokasi untuk melacak pengiriman.');
-      }
-
+      await saveCourierData(result.courier);
       router.replace('/');
-    } catch (error: unknown) {
-      Alert.alert('Login Gagal', error instanceof Error ? error.message : 'Cek kembali phone dan PIN');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Gagal terhubung ke server';
+      Alert.alert('Login Gagal', msg);
     }
     setLoading(false);
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={styles.inner}>
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inner}>
         <View style={styles.header}>
-          <Text style={styles.brand}>Rumah Keripik</Text>
-          <Text style={styles.title}>Login Kurir</Text>
+          <Text style={styles.logo}>🏪</Text>
+          <Text style={styles.title}>Rumah Keripik</Text>
+          <Text style={styles.subtitle}>Aplikasi Kurir</Text>
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.label}>Nomor Telepon</Text>
+          <Text style={styles.label}>Nomor HP</Text>
           <TextInput
             style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="081234567890"
+            placeholder="08123456789"
+            placeholderTextColor="#999"
             keyboardType="phone-pad"
             autoCapitalize="none"
-            editable={!loading}
+            value={phone}
+            onChangeText={setPhone}
           />
 
-          <Text style={styles.label}>PIN (6 digit)</Text>
+          <Text style={styles.label}>PIN</Text>
           <TextInput
             style={styles.input}
-            value={pin}
-            onChangeText={(t) => setPin(t.replace(/\D/g, '').slice(0, 6))}
-            placeholder="123456"
-            keyboardType="number-pad"
+            placeholder="******"
+            placeholderTextColor="#999"
             secureTextEntry
-            editable={!loading}
+            keyboardType="number-pad"
+            maxLength={6}
+            value={pin}
+            onChangeText={setPin}
           />
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
@@ -86,68 +82,36 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xxl,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: spacing.xxl + spacing.lg,
-  },
-  brand: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.accent,
-    marginBottom: spacing.xs,
-  },
-  title: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  form: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xxl,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
+  header: { alignItems: 'center', marginBottom: 48 },
+  logo: { fontSize: 64, marginBottom: spacing.md },
+  title: { fontSize: 28, fontWeight: '700', color: colors.accent },
+  subtitle: { fontSize: 16, color: colors.textSecondary, marginTop: 4 },
+  form: { gap: spacing.md },
+  label: { fontSize: 14, fontWeight: '600', color: colors.text },
   input: {
-    backgroundColor: colors.bg,
-    borderRadius: borderRadius.md,
-    padding: spacing.md + 2,
-    fontSize: 16,
-    color: colors.text,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.lg,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text,
   },
   button: {
     backgroundColor: colors.accent,
     borderRadius: borderRadius.md,
-    padding: spacing.md + 4,
+    padding: spacing.md,
     alignItems: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
-  buttonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

@@ -5,6 +5,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import { processQueue } from '../src/lib/offline-queue';
+import { initSentry } from '../src/lib/sentry';
+
+initSentry();
 
 function OfflineQueueProcessor() {
   useEffect(() => {
@@ -25,6 +28,7 @@ export default function RootLayout() {
         <OfflineQueueProcessor />
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="lock" />
           <Stack.Screen name="login" />
           <Stack.Screen name="index" />
           <Stack.Screen name="delivery/[id]" />
@@ -35,6 +39,12 @@ export default function RootLayout() {
           <Stack.Screen name="history" />
           <Stack.Screen name="earnings/index" />
           <Stack.Screen name="sos/index" />
+          <Stack.Screen name="shift/index" />
+          <Stack.Screen name="incidents/index" />
+          <Stack.Screen name="notifications/index" />
+          <Stack.Screen name="stats/index" />
+          <Stack.Screen name="route/today" />
+          <Stack.Screen name="profile" />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

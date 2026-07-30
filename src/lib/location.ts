@@ -1,12 +1,16 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { sendLocationBatch } from './api-client';
+import { sendLocationBatch, getTodayDeliveries } from './api-client';
+import { getToken } from './storage';
+import { isWithinGeofence } from './geofence';
 
 const LOCATION_TASK = 'courier-location-tracking';
 let isTracking = false;
 let lastSpeed = 0;
 
 const OFFLINE_LOCATIONS_KEY = 'offline_locations';
+const ARRIVED_CACHE_KEY = 'arrived_delivery_ids';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://rumah-keripik.vercel.app';
 
 function getAccuracyForSpeed(speed: number | null): Location.LocationAccuracy {
   const s = speed ?? 0;
@@ -31,6 +35,49 @@ export async function getCurrentLocation(): Promise<Location.LocationObject | nu
   }
 }
 
+async function getArrivedCache(): Promise<Set<number>> {
+  try {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const raw = await AsyncStorage.getItem(ARRIVED_CACHE_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch { return new Set(); }
+}
+
+async function markArrived(deliveryId: number) {
+  try {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const raw = await AsyncStorage.getItem(ARRIVED_CACHE_KEY);
+    const set: number[] = raw ? JSON.parse(raw) : [];
+    set.push(deliveryId);
+    await AsyncStorage.setItem(ARRIVED_CACHE_KEY, JSON.stringify(set));
+  } catch {}
+}
+
+async function checkGeofence(lat: number, lng: number) {
+  try {
+    const arrivedIds = await getArrivedCache();
+    const data = await getTodayDeliveries();
+    const inTransit = data.deliveries.filter(
+      (d) => d.status === 'Dalam_Pengiriman' && !arrivedIds.has(d.id)
+    );
+    for (const delivery of inTransit) {
+      const destLat = delivery.latitude ? parseFloat(delivery.latitude) : null;
+      const destLng = delivery.longitude ? parseFloat(delivery.longitude) : null;
+      if (destLat === null || destLng === null) continue;
+      if (isWithinGeofence(lat, lng, destLat, destLng, 100)) {
+        const token = await getToken();
+        if (!token) continue;
+        await fetch(`${BASE_URL}/api/courier/deliveries/${delivery.id}/arrived`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ lat, lng, source: 'geofence' }),
+        });
+        await markArrived(delivery.id);
+      }
+    }
+  } catch {}
+}
+
 TaskManager.defineTask(LOCATION_TASK, async ({ data: taskData, error: taskError }: { data: unknown; error: unknown }) => {
   if (taskError) return;
   const { locations } = taskData as { locations: Location.LocationObject[] };
@@ -38,6 +85,7 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data: taskData, error: taskError 
 
   const latest = locations[locations.length - 1];
   const accuracy = getAccuracyForSpeed(latest.coords.speed);
+  const { latitude, longitude } = latest.coords;
 
   const batch = locations.map((loc) => ({
     lat: loc.coords.latitude,
@@ -52,6 +100,8 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data: taskData, error: taskError 
   } catch {
     await enqueueOfflineLocation(batch);
   }
+
+  checkGeofence(latitude, longitude);
 });
 
 async function enqueueOfflineLocation(locations: Array<{ lat: number; lng: number; accuracy?: number; speed?: number; timestamp: number }>) {

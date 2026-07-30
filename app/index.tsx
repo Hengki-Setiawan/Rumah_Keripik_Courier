@@ -148,7 +148,7 @@ export default function DashboardScreen() {
   }
 
   function goToDetail(delivery: CourierDeliveryDto) {
-    router.push(`/delivery/${delivery.id}`);
+    router.push(`/delivery/${delivery.id}` as any);
   }
 
   if (loading) {
@@ -203,11 +203,28 @@ export default function DashboardScreen() {
       </TouchableOpacity>
 
       <View style={styles.navRow}>
+        <TouchableOpacity style={styles.navBtn} onPress={() => router.push('/route/today' as any)}>
+          <Text style={styles.navBtnText}>📍 Rute</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navBtn} onPress={() => router.push('/shift' as any)}>
+          <Text style={styles.navBtnText}>⏰ Shift</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.navBtn} onPress={() => router.push('/earnings')}>
           <Text style={styles.navBtnText}>💰 Pendapatan</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navBtnSos} onPress={() => router.push('/sos')}>
-          <Text style={styles.navBtnTextSos}>🆘 Darurat</Text>
+          <Text style={styles.navBtnTextSos}>🆘 SOS</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={[styles.navRow, { marginTop: 0 }]}>
+        <TouchableOpacity style={styles.navBtnLight} onPress={() => router.push('/notifications' as any)}>
+          <Text style={styles.navBtnText}>🔔 Notifikasi</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navBtnLight} onPress={() => router.push('/incidents' as any)}>
+          <Text style={styles.navBtnText}>⚠️ Insiden</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navBtnLight} onPress={() => router.push('/history')}>
+          <Text style={styles.navBtnText}>📜 Riwayat</Text>
         </TouchableOpacity>
       </View>
 
@@ -434,6 +451,10 @@ const styles = StyleSheet.create({
   },
   navRow: {
     flexDirection: 'row', paddingHorizontal: spacing.md, marginBottom: spacing.sm, gap: 8,
+  },
+  navBtnLight: {
+    flex: 1, backgroundColor: '#f9f5ef', borderRadius: borderRadius.md, padding: spacing.md,
+    alignItems: 'center', borderWidth: 1, borderColor: colors.border,
   },
   navBtn: {
     flex: 1, backgroundColor: '#fff', borderRadius: borderRadius.md, padding: spacing.md,
