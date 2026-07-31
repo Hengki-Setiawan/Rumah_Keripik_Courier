@@ -89,23 +89,23 @@ function RootLayoutInner() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       {authState === 'authenticated' ? (
-        <>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="delivery/[id]" />
-          <Stack.Screen name="delivery/[id]/map" />
-          <Stack.Screen name="delivery/[id]/proof" />
-          <Stack.Screen name="delivery/[id]/success" />
-          <Stack.Screen name="delivery/[id]/fail" />
-          <Stack.Screen name="earnings/index" />
-          <Stack.Screen name="sos/index" />
-          <Stack.Screen name="shift/index" />
-          <Stack.Screen name="incidents/index" />
-          <Stack.Screen name="notifications/index" />
-          <Stack.Screen name="route/today" />
-          <Stack.Screen name="battery-guide" />
-          <Stack.Screen name="lock" />
-          <Stack.Screen name="settings/index" />
-        </>
+        [
+          <Stack.Screen key="tabs" name="(tabs)" />,
+          <Stack.Screen key="delivery" name="delivery/[id]" />,
+          <Stack.Screen key="delivery-map" name="delivery/[id]/map" />,
+          <Stack.Screen key="delivery-proof" name="delivery/[id]/proof" />,
+          <Stack.Screen key="delivery-success" name="delivery/[id]/success" />,
+          <Stack.Screen key="delivery-fail" name="delivery/[id]/fail" />,
+          <Stack.Screen key="earnings" name="earnings/index" />,
+          <Stack.Screen key="sos" name="sos/index" />,
+          <Stack.Screen key="shift" name="shift/index" />,
+          <Stack.Screen key="incidents" name="incidents/index" />,
+          <Stack.Screen key="notifications" name="notifications/index" />,
+          <Stack.Screen key="route" name="route/today" />,
+          <Stack.Screen key="battery-guide" name="battery-guide" />,
+          <Stack.Screen key="lock" name="lock" />,
+          <Stack.Screen key="settings" name="settings/index" />,
+        ]
       ) : (
         <Stack.Screen name="(auth)" />
       )}

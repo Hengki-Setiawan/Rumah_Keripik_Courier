@@ -37,6 +37,7 @@ interface RouteStop {
   lng: number;
   name: string;
   type: 'start' | 'destination' | 'current';
+  delivery_id?: number;
   id_transaksi?: string;
   sequence_no?: number;
 }
@@ -365,10 +366,10 @@ export default function RouteTodayScreen() {
               </TouchableOpacity>
             </View>
 
-            {selectedStop.id_transaksi && (
+            {selectedStop.delivery_id ? (
               <TouchableOpacity
                 style={[styles.sheetDetailBtn, { borderColor: colors.border }]}
-                onPress={() => router.push(`/delivery/${selectedStop.id_transaksi!.split('-')[1]}`)}
+                onPress={() => router.push(`/delivery/${selectedStop.delivery_id}`)}
                 activeOpacity={0.8}
               >
                 <ChevronRight size={16} color={colors.accent} />
@@ -376,7 +377,7 @@ export default function RouteTodayScreen() {
                   Lihat Detail Pengiriman
                 </Text>
               </TouchableOpacity>
-            )}
+            ) : null}
           </>
         )}
       </GlassBottomSheet>
