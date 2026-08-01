@@ -13,6 +13,7 @@ web-build/
 android/.gradle/
 android/app/build/
 android/build/
+apk/
 ios/Pods/
 ios/build/
 *.hprof
