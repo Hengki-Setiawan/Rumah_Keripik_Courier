@@ -77,3 +77,18 @@ Same warm palette as the main app: beige bg (#faf6ef), orange accent (#c55a2b), 
 npx expo prebuild --no-install
 cd android && ./gradlew assembleDebug --no-daemon
 ```
+
+## EAS Update (OTA)
+Fix JS tanpa rebuild APK. App terhubung ke EAS project `hengki_setiawan/rumah-kripik-courier` (projectId `f036e134-69ca-475c-8569-a72d8d42b435`, URL `https://u.expo.dev/f036e134-69ca-475c-8569-a72d8d42b435`).
+- **Push update**: GitHub → Actions → `Push EAS Update (OTA)` → Run workflow (channel `production` = APK release). Pakai secret `EXPO_TOKEN`.
+- **Setelah install APK v1.0.3+**: app cek update `ON_LOAD` (fallbackToCacheTimeout 0) → buka/tutup app untuk tarik update terbaru.
+- **Yang BISA di-update**: logika JS/TS, UI, error handling (Sentry + logger murni JS).
+- **Yang TIDAK bisa (harus rebuild APK)**: native module baru, AndroidManifest/permission baru, upgrade SDK.
+- **Verifikasi update aktif**: `adb logcat -s ReactNativeJS:* | grep RK_COURIER` atau cek di app.
+- Secrets GitHub: `EXPO_TOKEN` (akun hengki_setiawan), `EAS_PROJECT_ID`.
+- `eas.json`: profile `production`/`preview` punya `channel` untuk EAS Update; APK build tetap via GitHub Actions (bukan EAS Build).
+
+## Log system USB
+- `src/lib/logger.ts` — override console.* dengan tag `[RK_COURIER]`, `ErrorUtils.setGlobalHandler` → Sentry + SQLite buffer.
+- `src/lib/sqlite-db.ts` — tabel `app_logs` (buffer 500 baris), `saveLog`/`getRecentLogs`.
+- Verifikasi live: `adb logcat -s ReactNativeJS:* | grep RK_COURIER`.
