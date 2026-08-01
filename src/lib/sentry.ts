@@ -1,4 +1,4 @@
-let SentryFallback: { captureException: (err: unknown) => void; captureMessage: (msg: string) => void } = {
+let SentryImpl: { captureException: (err: unknown) => void; captureMessage: (msg: string) => void } = {
   captureException: () => {},
   captureMessage: () => {},
 };
@@ -14,10 +14,13 @@ export function initSentry() {
       tracesSampleRate: 0.2,
       environment: process.env.EXPO_PUBLIC_APP_ENV || 'production',
     });
-    SentryFallback = SentryModule;
+    SentryImpl = SentryModule;
   } catch {
     // Sentry optional — silently skipped
   }
 }
 
-export const Sentry = SentryFallback;
+export const Sentry = {
+  captureException: (err: unknown) => SentryImpl.captureException(err),
+  captureMessage: (msg: string) => SentryImpl.captureMessage(msg),
+};
