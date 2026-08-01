@@ -1,10 +1,10 @@
-﻿name: Build Courier APK
+name: Build Courier APK
 on:
   push:
-    branches: [master]
+    branches: [master, build/standalone-apk]
     tags: ['v*']
   pull_request:
-    branches: [master]
+    branches: [master, build/standalone-apk]
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,6 +13,7 @@ permissions:
   contents: write
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true
+  EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
 jobs:
   typecheck:
     runs-on: ubuntu-latest
@@ -51,31 +52,35 @@ jobs:
         run: npm install
       - name: Prebuild (generate android folder)
         run: npx expo prebuild --no-install
-      - name: Configure APK splitting (smaller APK)
+      - name: Configure Dual ABI Release APK (arm64-v8a for Itel RS4 + x86_64 for emulator)
         run: |
           node -e "
             const fs = require('fs');
             let build = fs.readFileSync('android/app/build.gradle', 'utf8');
             build = build.replace(
+              /buildTypes\s*\{[\s\S]*?release\s*\{/,
+              'buildTypes {\n        release {\n            signingConfig signingConfigs.debug\n'
+            );
+            build = build.replace(
               /    defaultConfig {/,
-              '    splits {\n        abi {\n            enable true\n            reset()\n            include \"arm64-v8a\", \"armeabi-v7a\", \"x86_64\", \"x86\"\n            universalApk false\n        }\n    }\n    defaultConfig {'
+              '    splits {\n        abi {\n            enable true\n            reset()\n            include \"arm64-v8a\", \"x86_64\"\n            universalApk false\n        }\n    }\n    defaultConfig {'
             );
             fs.writeFileSync('android/app/build.gradle', build);
           "
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      - name: Build APK (debug - split by arch)
-        run: cd android && ./gradlew assembleDebug --no-daemon
-      - name: Upload APK Artifact
+      - name: Build Dual ABI Release APK (arm64-v8a + x86_64)
+        run: cd android && ./gradlew assembleRelease --no-daemon
+      - name: Upload Release APKs (Itel RS4 + Emulator)
         uses: actions/upload-artifact@v4
         with:
-          name: rumah-keripik-courier-apk
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          name: Rumah-Keripik-Courier-Release-APKs
+          path: android/app/build/outputs/apk/release/app-*-release.apk
+          if-no-files-found: error
           retention-days: 30
       - name: Attach APK to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: android/app/build/outputs/apk/debug/*.apk
+          files: android/app/build/outputs/apk/release/app-*-release.apk
           fail_on_unmatched_files: false
