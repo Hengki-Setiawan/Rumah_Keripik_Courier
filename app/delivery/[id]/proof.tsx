@@ -115,8 +115,9 @@ export default function ProofScreen() {
         encoding: FileSystem.EncodingType.Base64,
       });
       const proofUrl = `data:image/jpeg;base64,${photoData}`;
-      const body: { proof_photo_url: string; notes?: string; signature_base64?: string } = {
+      const body: { proof_photo_url: string; proof_url: string; notes?: string; signature_base64?: string } = {
         proof_photo_url: proofUrl,
+        proof_url: proofUrl,
       };
       if (notes) body.notes = notes;
       if (signatureUri) body.signature_base64 = signatureUri;

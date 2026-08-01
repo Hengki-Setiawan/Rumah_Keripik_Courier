@@ -106,7 +106,7 @@ export default function LockScreen() {
       fallbackLabel: 'Gunakan PIN',
     });
     if (result.success) {
-      router.replace('/(tabs)' as any);
+      router.replace('/' as any);
     }
   }
 
@@ -123,7 +123,7 @@ export default function LockScreen() {
       if (value.length === 6) {
         if (value === pin) {
           setAppPin(value);
-          router.replace('/(tabs)' as any);
+          router.replace('/' as any);
         } else {
           setError(true);
           setStep('setup_new');
@@ -141,7 +141,7 @@ export default function LockScreen() {
   async function verifyPin(input: string) {
     const stored = await getAppPin();
     if (stored && input === stored) {
-      router.replace('/(tabs)' as any);
+      router.replace('/' as any);
     } else {
       setError(true);
       setPin('');
@@ -149,7 +149,7 @@ export default function LockScreen() {
   }
 
   function handleSkip() {
-    router.replace('/(tabs)' as any);
+    router.replace('/' as any);
   }
 
   function handleDelete() {

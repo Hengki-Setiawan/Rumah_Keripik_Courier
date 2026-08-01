@@ -62,7 +62,7 @@ export default function FailScreen() {
       await recordSyncAudit({ deliveryId, action: 'fail', serverVerified: false });
       await saveDraft();
       setLoading(false);
-      router.replace('/(tabs)' as any);
+      router.replace('/' as any);
       return;
     }
     try {
@@ -73,7 +73,7 @@ export default function FailScreen() {
       });
       await AsyncStorage.removeItem(DRAFT_KEY + id);
       stopTracking();
-      router.replace('/(tabs)' as any);
+      router.replace('/' as any);
     } catch {
       await saveDraft();
       Alert.alert(t('common.error'), 'Gagal mengirim. Draft tersimpan dan akan dikirim ulang otomatis.');

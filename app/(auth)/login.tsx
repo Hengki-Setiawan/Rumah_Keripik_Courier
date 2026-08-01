@@ -143,7 +143,7 @@ export default function LoginScreen() {
       signIn();
       setLoginSuccess(true);
       await new Promise((r) => setTimeout(r, 800));
-      router.replace('/(tabs)' as any);
+      router.replace('/' as any);
     } catch (error) {
       const rawMsg = error instanceof Error ? error.message : 'Gagal terhubung ke server';
       let localizedMsg = rawMsg;

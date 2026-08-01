@@ -25,7 +25,7 @@ export default function SuccessScreen() {
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.accent }]}
-            onPress={() => router.replace('/(tabs)' as any)}
+            onPress={() => router.replace('/' as any)}
           >
             <ClipboardList size={18} color="#ffffff" style={{ marginRight: 8 }} />
             <Text style={styles.primaryButtonText}>{t('delivery.backToDashboard')}</Text>
