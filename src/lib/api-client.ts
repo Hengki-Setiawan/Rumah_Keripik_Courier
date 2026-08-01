@@ -1,6 +1,7 @@
 import { getToken, removeToken } from './storage';
 import type { CourierDeliveryDto, Waypoint, CourierDto, CompleteData, FailData } from './types';
 import { enqueueRequest, processQueue } from './offline-queue';
+import { logError, logWarn } from './logger';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://rumah-keripik.vercel.app';
 
@@ -29,7 +30,8 @@ async function request<T>(
       ...options,
       headers,
     });
-  } catch {
+  } catch (err) {
+    logWarn(`[API] ${options.method || 'GET'} ${path} network failed — offline queue used`);
     await processQueue();
     const parsedBody = typeof options.body === 'string' ? JSON.parse(options.body) : {};
     await enqueueRequest(path, options.method || 'GET', parsedBody, token);
@@ -37,6 +39,7 @@ async function request<T>(
   }
 
   if (res.status === 401) {
+    logWarn(`[API] ${options.method || 'GET'} ${path} -> 401 UNAUTHORIZED`);
     await removeToken();
     throw new Error('UNAUTHORIZED');
   }
@@ -45,10 +48,12 @@ async function request<T>(
   try {
     data = await res.json();
   } catch {
+    logError(`[API] ${options.method || 'GET'} ${path} -> ${res.status} invalid JSON response`);
     throw new Error('NETWORK_ERROR');
   }
 
   if (!data.ok) {
+    logError(`[API] ${options.method || 'GET'} ${path} -> ${res.status} ${String(data.error || 'Request failed')}`);
     throw new Error(String(data.error || 'Request failed'));
   }
 

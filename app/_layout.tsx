@@ -10,11 +10,13 @@ import * as Notifications from 'expo-notifications';
 import { processQueue } from '../src/lib/offline-queue';
 import { processSyncQueue } from '../src/db/sync-queue';
 import { initSentry } from '../src/lib/sentry';
+import { installErrorLogging } from '../src/lib/logger';
 import { QueryProvider } from '../src/query/provider';
 import { useSyncStore } from '../src/store/sync-store';
 import { AuthProvider, useAuth } from '../src/lib/auth-guard';
 
 initSentry();
+installErrorLogging();
 
 const THEME_KEY = 'courier_theme_pref';
 

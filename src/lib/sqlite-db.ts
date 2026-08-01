@@ -40,7 +40,29 @@ async function initTables() {
       speed REAL,
       timestamp INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS app_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      level TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now', 'utc'))
+    );
   `)
+}
+
+export async function saveLog(level: string, message: string) {
+  try {
+    const d = await getDb()
+    await d.runAsync('INSERT INTO app_logs (level, message) VALUES (?, ?)', level, message.slice(0, 4000))
+    await d.runAsync("DELETE FROM app_logs WHERE id NOT IN (SELECT id FROM app_logs ORDER BY id DESC LIMIT 500)")
+  } catch {
+    // logging must never throw
+  }
+}
+
+export async function getRecentLogs(limit = 200): Promise<Array<Record<string, unknown>>> {
+  const d = await getDb()
+  const rows = await d.getAllAsync('SELECT * FROM app_logs ORDER BY id DESC LIMIT ?', limit)
+  return rows as Array<Record<string, unknown>>
 }
 
 export async function cacheDeliveries(deliveries: Array<{
