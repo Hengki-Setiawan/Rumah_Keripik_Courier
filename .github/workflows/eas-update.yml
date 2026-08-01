@@ -1,0 +1,44 @@
+name: Push EAS Update (OTA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Update channel (production = APK kamu)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - preview
+      message:
+        description: 'Pesan update (opsional)'
+        required: false
+        default: 'Update JS via EAS'
+        type: string
+      branch:
+        description: 'Branch sumber kode'
+        required: false
+        default: 'master'
+        type: string
+
+concurrency:
+  group: eas-update
+  cancel-in-progress: false
+
+jobs:
+  push-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Push update to EAS
+        run: npx eas update --channel ${{ inputs.channel }} --message "${{ inputs.message }}"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

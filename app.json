@@ -2,7 +2,7 @@
   "expo": {
     "name": "Kurir Rumah Keripik",
     "slug": "rumah-kripik-courier",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,8 +18,8 @@
     },
     "android": {
       "package": "com.hengkisetiawan.rumahkeripikcourier",
-      "versionCode": 3,
-      "versionName": "1.0.2",
+      "versionCode": 4,
+      "versionName": "1.0.3",
       "adaptiveIcon": {
         "backgroundColor": "#FAF6EF",
         "foregroundImage": "./assets/adaptive-icon.png"
@@ -37,8 +37,19 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "updates": {
+      "enabled": true,
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD",
+      "channel": "production",
+      "runtimeVersion": {
+        "policy": "sdkVersion"
+      },
+      "url": "https://u.expo.dev/f036e134-69ca-475c-8569-a72d8d42b435"
+    },
     "plugins": [
       "expo-router",
+      "expo-updates",
       "expo-secure-store",
       "expo-sqlite",
       "expo-status-bar",
@@ -67,6 +78,12 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f036e134-69ca-475c-8569-a72d8d42b435"
+      }
+    },
+    "owner": "hengki_setiawan"
   }
 }
