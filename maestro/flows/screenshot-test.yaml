@@ -1,0 +1,11 @@
+appId: com.hengkisetiawan.rumahkeripikcourier
+env:
+  SCREENSHOTS_DIR: "./maestro/screenshots"
+---
+- launchApp
+- takeScreenshot:
+    path: "${SCREENSHOTS_DIR}/login-screen.png"
+- tapOn: "Masuk"
+- assertVisible: "Nomor telepon tidak valid"
+- takeScreenshot:
+    path: "${SCREENSHOTS_DIR}/login-validation.png"

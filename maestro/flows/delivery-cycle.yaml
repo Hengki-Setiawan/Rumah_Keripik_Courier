@@ -1,0 +1,95 @@
+appId: com.hengkisetiawan.rumahkeripikcourier
+name: "Delivery Cycle E2E (prod, no mocks)"
+env:
+  COURIER_PHONE: ${COURIER_PHONE}
+  COURIER_PIN: ${COURIER_PIN}
+  KODE_PESANAN: ${KODE_PESANAN}
+  ASSIGNMENT_ID: ${ASSIGNMENT_ID}
+tags:
+  - e2e
+---
+# Full delivery cycle against PROD. Requires a delivery_assignment created
+# today for this courier (produced by e2e-crossplatform.spec.ts via the admin UI).
+# Open Maestro Viewer: http://127.0.0.1:10000/
+- launchApp:
+    clearState: true
+    permissions:
+      camera: allow
+      location: allow
+      notifications: allow
+
+- extendedWaitUntil:
+    visible: "Masuk ke Dashboard"
+    timeout: 60000
+
+# --- Login as courier (Budi) ---
+- tapOn: "Nomor HP"
+- inputText: ${COURIER_PHONE}
+- tapOn: "Digit PIN ke-1"
+- inputText: ${COURIER_PIN}
+- tapOn: "Masuk ke Dashboard"
+
+# Dashboard loaded (nav grid visible)
+- extendedWaitUntil:
+    visible: "Shift"
+    timeout: 60000
+
+# --- Clock in from the Shift screen ---
+- tapOn: "Shift"
+- extendedWaitUntil:
+    visible: "Clock In"
+    timeout: 30000
+- tapOn: "Clock In"
+- extendedWaitUntil:
+    visible: "Clock-In Berhasil"
+    timeout: 40000
+- tapOn: "OK"
+
+# --- Open the assigned delivery via deep link ---
+- openLink: rumah-kripik-courier://delivery/${ASSIGNMENT_ID}
+
+# Delivery detail loaded with the assigned order
+- extendedWaitUntil:
+    visible: ${KODE_PESANAN}
+    timeout: 40000
+- assertVisible: "Ambil Barang & Mulai Kirim"
+
+# --- Start delivery (Siap_Dikirim -> Dalam_Pengiriman) ---
+- tapOn: "Ambil Barang & Mulai Kirim"
+- extendedWaitUntil:
+    visible: "Status pengiriman diubah ke Dalam Perjalanan"
+    timeout: 40000
+- tapOn: "OK"
+
+# In-transit: proof button is available
+- extendedWaitUntil:
+    visible: "Bukti Pengiriman"
+    timeout: 30000
+- tapOn: "Bukti Pengiriman"
+
+# --- Proof: seed the gallery then pick a photo ---
+- addMedia:
+    - "./maestro/assets/proof-sample.jpg"
+- extendedWaitUntil:
+    visible: "Ambil Foto"
+    timeout: 30000
+- tapOn: "Dari Galeri"
+- extendedWaitUntil:
+    visible: "Konfirmasi Berhasil Antar"
+    timeout: 40000
+# Select the seeded photo in the Android photo picker
+- tapOn:
+    point: "50%, 45%"
+- extendedWaitUntil:
+    visible: "Konfirmasi Berhasil Antar"
+    timeout: 30000
+
+# --- Complete delivery (Dalam_Pengiriman -> Terkirim) ---
+- tapOn: "Konfirmasi Berhasil Antar"
+
+# --- Success screen ---
+- extendedWaitUntil:
+    visible: "Pengiriman Selesai!"
+    timeout: 50000
+- assertVisible: "Kembali ke Daftar"
+- takeScreenshot: "delivery-completed"

@@ -3,5 +3,13 @@
   "compilerOptions": {
     "strict": true
   },
-  "exclude": ["e2e"]
+  "exclude": [
+    "e2e"
+  ],
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
 }

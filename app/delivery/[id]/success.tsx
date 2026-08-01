@@ -1,25 +1,34 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { router, useLocalSearchParams, Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius } from '../../../src/theme';
+import { CheckCircle2, ClipboardList, ArrowLeft } from 'lucide-react-native';
+
+import { useAppColors, spacing, borderRadius } from '../../../src/theme';
+import { t } from '../../../src/i18n';
 
 export default function SuccessScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const colors = useAppColors();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          <Text style={styles.icon}>✅</Text>
+        <View style={[styles.iconContainer, { backgroundColor: colors.greenLight }]}>
+          <CheckCircle2 size={40} color={colors.green} />
         </View>
-        <Text style={styles.title}>Pengiriman Berhasil!</Text>
-        <Text style={styles.subtitle}>Barang telah berhasil diantar ke pelanggan.</Text>
+        <Text style={[styles.title, { color: colors.green }]}>{t('delivery.success_title')}</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {t('delivery.successMessage')}
+        </Text>
 
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/')}>
-            <Text style={styles.primaryButtonText}>📋 Kembali ke Daftar</Text>
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: colors.accent }]}
+            onPress={() => router.replace('/' as any)}
+          >
+            <ClipboardList size={18} color="#ffffff" style={{ marginRight: 8 }} />
+            <Text style={styles.primaryButtonText}>{t('delivery.backToDashboard')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -28,10 +37,7 @@ export default function SuccessScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
+  container: { flex: 1 },
   content: {
     flex: 1,
     justifyContent: 'center',
@@ -42,39 +48,35 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.greenLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
-  icon: {
-    fontSize: 40,
-  },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.green,
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 15,
-    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: spacing.xxl + spacing.xl,
     lineHeight: 22,
   },
   actions: {
     width: '100%',
+    gap: spacing.md,
   },
   primaryButton: {
-    backgroundColor: colors.accent,
+    flexDirection: 'row',
     borderRadius: borderRadius.md,
     padding: spacing.md + 2,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryButtonText: {
-    color: colors.white,
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
   },

@@ -36,6 +36,7 @@ export interface Waypoint {
   lng: number;
   name: string;
   type: 'start' | 'destination' | 'current';
+  delivery_id?: number;
   id_transaksi?: string;
   sequence_no?: number;
 }

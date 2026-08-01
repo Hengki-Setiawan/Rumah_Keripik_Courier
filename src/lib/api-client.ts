@@ -56,7 +56,7 @@ async function request<T>(
 }
 
 export async function login(phone: string, pin: string) {
-  return request<{ token: string; courier: CourierDto }>(
+  return request<{ token?: string; accessToken?: string; refreshToken?: string; courier: CourierDto }>(
     '/api/courier/auth/login',
     {
       method: 'POST',
@@ -135,5 +135,68 @@ export async function verifyDeviceBinding(deviceId: string) {
   return request<{ ok: boolean; bound: boolean }>(
     '/api/courier/device',
     { method: 'POST', body: JSON.stringify({ action: 'verify', deviceId }) }
+  );
+}
+
+export async function clockInCourier(lat?: number, lng?: number) {
+  return request<{ ok: boolean; data: { shiftId: number; clockInAt: string } }>(
+    '/api/courier/shift/clock-in',
+    { method: 'POST', body: JSON.stringify({ lat, lng }) }
+  );
+}
+
+export async function clockOutCourier(lat?: number, lng?: number) {
+  return request<{ ok: boolean; data: { shiftId: number; clockInAt: string; clockOutAt: string; totalDeliveries: number } }>(
+    '/api/courier/shift/clock-out',
+    { method: 'POST', body: JSON.stringify({ lat, lng }) }
+  );
+}
+
+export async function getNotifications(limit?: number) {
+  return request<{ ok: boolean; data: { notifications: Notification[]; unreadCount: number } }>(
+    `/api/courier/notifications${limit ? `?limit=${limit}` : ''}`
+  );
+}
+
+export async function markNotificationRead(notificationId?: number) {
+  return request<{ ok: boolean }>(
+    '/api/courier/notifications',
+    { method: 'PATCH', body: JSON.stringify(notificationId ? { notificationId } : { markAllRead: true }) }
+  );
+}
+
+export async function getStats(period?: string) {
+  return request<{ ok: boolean; data: { totalAssigned: number; totalCompleted: number; totalFailed: number; onTimeRate: number; totalDistanceKm: number; incidentCount: number; score: number; rank: number; totalCouriers: number; completionRate: number } }>(
+    `/api/courier/stats/me${period ? `?period=${period}` : ''}`
+  );
+}
+
+export async function reportIncident(data: { type: string; severity?: string; description?: string; lat?: string; lng?: string; deliveryId?: number; photoUrl?: string }) {
+  return request<{ ok: boolean }>(
+    '/api/courier/incidents',
+    { method: 'POST', body: JSON.stringify(data) }
+  );
+}
+
+export async function getEarnings(period?: string) {
+  return request<{
+    ok: boolean;
+    earnings: Array<{ baseFee: number; bonusAmount: number; status: string; createdAt: string; orderId: string }>;
+    summary: { totalConfirmed: number; pendingTotal: number; deliveryCount: number; period: string };
+  }>(`/api/courier/earnings${period ? `?period=${period}` : ''}`);
+}
+
+export async function getDeliveryHistory(limit = 50, offset = 0, status?: string) {
+  return request<{
+    ok: boolean;
+    deliveries: CourierDeliveryDto[];
+    pagination: { total: number; limit: number; offset: number; hasMore: boolean };
+  }>(`/api/courier/deliveries/history?limit=${limit}&offset=${offset}${status ? `&status=${status}` : ''}`);
+}
+
+export async function registerPushToken(expoPushToken: string, platform?: string) {
+  return request<{ ok: boolean }>(
+    '/api/courier/push-tokens',
+    { method: 'POST', body: JSON.stringify({ expoPushToken, platform }) }
   );
 }
