@@ -1,6 +1,13 @@
-let SentryImpl: { captureException: (err: unknown) => void; captureMessage: (msg: string) => void } = {
+type SentryBridge = {
+  captureException: (err: unknown) => void;
+  captureMessage: (msg: string, level?: 'info' | 'warning' | 'error' | 'fatal') => void;
+  addBreadcrumb: (breadcrumb: { level?: 'debug' | 'info' | 'warning' | 'error' | 'fatal'; message: string; category?: string }) => void;
+};
+
+let SentryImpl: SentryBridge = {
   captureException: () => {},
   captureMessage: () => {},
+  addBreadcrumb: () => {},
 };
 
 export function initSentry() {
@@ -20,7 +27,8 @@ export function initSentry() {
   }
 }
 
-export const Sentry = {
+export const Sentry: SentryBridge = {
   captureException: (err: unknown) => SentryImpl.captureException(err),
-  captureMessage: (msg: string) => SentryImpl.captureMessage(msg),
+  captureMessage: (msg: string, level?: 'info' | 'warning' | 'error' | 'fatal') => SentryImpl.captureMessage(msg, level),
+  addBreadcrumb: (breadcrumb) => SentryImpl.addBreadcrumb(breadcrumb),
 };
