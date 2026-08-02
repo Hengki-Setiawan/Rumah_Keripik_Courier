@@ -67,6 +67,19 @@ jobs:
             );
             fs.writeFileSync('android/app/build.gradle', build);
           "
+      - name: Raise Gradle memory (Metaspace) for KSP/expo-updates
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'android/gradle.properties';
+            let c = fs.readFileSync(p, 'utf8');
+            c = c.replace(
+              /org.gradle.jvmargs=.*/,
+              'org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1536m -XX:+HeapDumpOnOutOfMemoryError'
+            );
+            fs.writeFileSync(p, c);
+            console.log('gradle.properties memory raised');
+          "
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       - name: Build Dual ABI Release APK (arm64-v8a + x86_64)
