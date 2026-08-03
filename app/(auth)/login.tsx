@@ -21,7 +21,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import {
   Store,
-  Phone,
   ArrowRight,
   ShieldAlert,
   CheckCircle,
@@ -41,13 +40,11 @@ const PIN_LENGTH = 6;
 export default function LoginScreen() {
   const colors = useAppColors();
   const { signIn } = useAuth();
-  const [phone, setPhone] = useState('');
-  const [pin, setPin] = useState(['', '', '', '', '', '']);
+  const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const [loginSuccess, setLoginSuccess] = useState(false);
-  const pinRefs = useRef<(TextInput | null)[]>([]);
 
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
 
@@ -76,34 +73,11 @@ export default function LoginScreen() {
     }).start();
   }, []);
 
-  function handlePhoneChange(val: string) {
-    const cleaned = val.replace(/[^0-9]/g, '');
-    setPhone(cleaned);
+  function handlePinChange(text: string) {
+    const cleaned = text.replace(/[^0-9]/g, '').slice(0, PIN_LENGTH);
+    setPin(cleaned);
     setErrorMessage('');
-  }
-
-  function handlePinDigit(text: string, index: number) {
-    const digit = text.replace(/[^0-9]/g, '').slice(-1);
-    const newPin = [...pin];
-    newPin[index] = digit;
-    setPin(newPin);
-    setErrorMessage('');
-
     if (Platform.OS !== 'web') selectionTap();
-
-    if (digit && index < PIN_LENGTH - 1) {
-      pinRefs.current[index + 1]?.focus();
-    }
-  }
-
-  function handlePinKey(key: string, index: number) {
-    if (key === 'Backspace' && !pin[index] && index > 0) {
-      pinRefs.current[index - 1]?.focus();
-    }
-  }
-
-  function getPinString() {
-    return pin.join('');
   }
 
   async function handleLogin() {
@@ -111,15 +85,7 @@ export default function LoginScreen() {
 
     if (lockoutSeconds > 0) return;
 
-    if (!phone || phone.length < 10) {
-      setErrorMessage('Nomor HP wajib diisi minimal 10 digit');
-      shake();
-      if (Platform.OS !== 'web') notificationError();
-      return;
-    }
-
-    const pinStr = getPinString();
-    if (pinStr.length !== PIN_LENGTH) {
+    if (pin.length !== PIN_LENGTH) {
       setErrorMessage('PIN wajib terdiri dari tepat 6 digit');
       shake();
       if (Platform.OS !== 'web') notificationError();
@@ -130,7 +96,7 @@ export default function LoginScreen() {
     if (Platform.OS !== 'web') impactMedium();
 
     try {
-      const result = await login(phone, pinStr);
+      const result = await login(pin);
       const token = result.accessToken || result.token;
       if (!token) {
         throw new Error('NO_TOKEN');
@@ -149,7 +115,7 @@ export default function LoginScreen() {
       let localizedMsg = rawMsg;
 
       if (rawMsg === 'UNAUTHORIZED' || rawMsg.includes('401') || rawMsg.includes('tidak valid')) {
-        localizedMsg = 'Nomor HP atau PIN 6-digit tidak sesuai. Silakan periksa kembali.';
+        localizedMsg = 'PIN 6-digit tidak sesuai. Silakan periksa kembali.';
       } else if (rawMsg === 'NO_TOKEN') {
         localizedMsg = 'Sesi login telah berakhir. Silakan login kembali.';
       } else if (rawMsg === 'NETWORK_ERROR' || rawMsg.includes('fetch') || rawMsg.includes('Network')) {
@@ -161,15 +127,14 @@ export default function LoginScreen() {
 
       setErrorMessage(localizedMsg);
       shake();
-      setPin(['', '', '', '', '', '']);
-      pinRefs.current[0]?.focus();
+      setPin('');
       if (Platform.OS !== 'web') notificationError();
     } finally {
       setLoading(false);
     }
   }
 
-  const isFormValid = phone.length >= 10 && getPinString().length === PIN_LENGTH && !lockoutSeconds;
+  const isFormValid = pin.length === PIN_LENGTH && !lockoutSeconds;
 
   if (loginSuccess) {
     return (
@@ -246,41 +211,6 @@ export default function LoginScreen() {
                   },
                 ]}
               >
-                {/* Phone Field */}
-                <View style={styles.fieldGroup}>
-                  <Text
-                    style={[styles.label, { color: colors.textSecondary }]}
-                    accessibilityRole="text"
-                  >
-                    Nomor HP (WhatsApp)
-                  </Text>
-                  <View
-                    style={[
-                      styles.inputWrapper,
-                      { backgroundColor: colors.surfaceDark, borderColor: colors.border },
-                      phone.length >= 10 && { borderColor: colors.green },
-                    ]}
-                  >
-                    <Phone size={18} color={colors.textMuted} style={styles.inputIcon} />
-                    <TextInput
-                      style={[styles.input, { color: colors.text }]}
-                      placeholder="081234567890"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="phone-pad"
-                      autoCapitalize="none"
-                      value={phone}
-                      onChangeText={handlePhoneChange}
-                      maxLength={15}
-                      editable={!loading}
-                      accessibilityLabel="Nomor HP"
-                      accessibilityRole="none"
-                    />
-                    {phone.length >= 10 && (
-                      <CheckCircle size={16} color={colors.green} />
-                    )}
-                  </View>
-                </View>
-
                 {/* PIN Field — 6 Glass Boxes with Blur */}
                 <View style={styles.fieldGroup}>
                   <View style={styles.pinHeaderRow}>
@@ -299,69 +229,30 @@ export default function LoginScreen() {
                       <Text
                         style={[
                           styles.pinCountText,
-                          { color: getPinString().length === PIN_LENGTH ? colors.green : colors.textMuted },
+                          { color: pin.length === PIN_LENGTH ? colors.green : colors.textMuted },
                         ]}
                       >
-                        {getPinString().length}/{PIN_LENGTH}
+                        {pin.length}/{PIN_LENGTH}
                       </Text>
                     </View>
                   </View>
 
-                  <View style={styles.pinBoxesRow}>
-                    {pin.map((digit, idx) => (
-                      <BlurView
-                        key={idx}
-                        intensity={20}
-                        tint={colors.bg === '#1a1613' ? 'dark' : 'light'}
-                        style={[
-                          styles.glassPinBox,
-                          {
-                            borderColor: digit
-                              ? colors.accent
-                              : errorMessage
-                                ? colors.error
-                                : colors.border,
-                            backgroundColor: errorMessage
-                              ? colors.errorBg + '60'
-                              : digit
-                                ? colors.accentLight + '40'
-                                : 'transparent',
-                          },
-                        ]}
-                      >
-                        <TextInput
-                          ref={(el) => { pinRefs.current[idx] = el; }}
-                          style={[styles.pinBoxInput, { color: colors.text }]}
-                          keyboardType="number-pad"
-                          maxLength={1}
-                          value={digit}
-                          onChangeText={(t) => handlePinDigit(t, idx)}
-                          onKeyPress={({ nativeEvent }) => handlePinKey(nativeEvent.key, idx)}
-                          secureTextEntry
-                          editable={!loading && !lockoutSeconds}
-                          selectTextOnFocus
-                          accessibilityLabel={`Digit PIN ke-${idx + 1}`}
-                          accessibilityRole="none"
-                        />
-                        <Text
-                          style={[
-                            styles.pinDigitText,
-                            {
-                              color: digit
-                                ? colors.accent
-                                : errorMessage
-                                  ? colors.error
-                                  : colors.textMuted,
-                              fontSize: digit ? 22 : 18,
-                            },
-                          ]}
-                        >
-                          {digit ? '●' : '○'}
-                        </Text>
-                      </BlurView>
-                    ))}
+                  <View style={styles.pinBoxSingle}>
+                    <TextInput
+                      style={[styles.pinInput, { color: colors.text }]}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      value={pin}
+                      onChangeText={handlePinChange}
+                      testID="login-pin-input"
+                      secureTextEntry
+                      editable={!loading && !lockoutSeconds}
+                      autoFocus
+                      accessibilityLabel="PIN 6 digit"
+                      accessibilityRole="none"
+                    />
                   </View>
-                </View>
+                  </View>
 
                 {/* Error Message */}
                 {Boolean(errorMessage) && (
@@ -383,6 +274,7 @@ export default function LoginScreen() {
 
                 {/* Submit Button */}
                 <BigActionButton
+                  testID="login-submit-btn"
                   label={lockoutSeconds > 0 ? `Tunggu ${lockoutSeconds} detik...` : 'Masuk ke Dashboard'}
                   onPress={handleLogin}
                   loading={loading}
@@ -494,14 +386,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    height: 50,
-  },
   inputIcon: {
     marginRight: spacing.sm,
   },
@@ -511,33 +395,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  pinBoxesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 4,
-  },
-  glassPinBox: {
-    flex: 1,
-    height: 60,
+  pinBoxSingle: {
+    borderWidth: 1,
     borderRadius: borderRadius.md,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    aspectRatio: 0.85,
-    overflow: 'hidden',
+    borderColor: '#D97706',
+    backgroundColor: 'rgba(0,0,0,0.04)',
   },
-  pinBoxInput: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    opacity: 0,
-  },
-  pinDigitText: {
+  pinInput: {
+    height: 56,
+    fontSize: 24,
     fontWeight: '800',
+    letterSpacing: 12,
     textAlign: 'center',
-  },
-  errorContainer: {
+  },    errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,

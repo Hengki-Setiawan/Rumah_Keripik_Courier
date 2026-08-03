@@ -5,14 +5,16 @@ type AuthState = 'loading' | 'authenticated' | 'unauthenticated';
 
 interface AuthContextValue {
   authState: AuthState;
-  signIn: () => void;
-  signOut: () => Promise<void>;
+	signIn: () => void;
+	signOut: () => Promise<void>;
+	devSignIn: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   authState: 'loading',
   signIn: () => {},
   signOut: async () => {},
+  devSignIn: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -33,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ authState, signIn, signOut }}>
+    <AuthContext.Provider value={{ authState, signIn, signOut, devSignIn: signIn }}>
       {children}
     </AuthContext.Provider>
   );
