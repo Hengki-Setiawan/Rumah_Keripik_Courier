@@ -79,6 +79,7 @@ function GlassTabBar() {
               accessibilityLabel={tab.title}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
+              testID={`tab-${tab.name}`}
             >
               <tab.icon focused={isActive} color={isActive ? colors.accent : colors.textMuted} />
               <Text
