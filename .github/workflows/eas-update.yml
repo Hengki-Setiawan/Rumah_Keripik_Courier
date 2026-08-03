@@ -39,6 +39,6 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Push update to EAS
-        run: npx eas update --channel ${{ inputs.channel }} --message "${{ inputs.message }}"
+        run: npx --yes eas-cli update --channel ${{ inputs.channel }} --message "${{ inputs.message }}"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
