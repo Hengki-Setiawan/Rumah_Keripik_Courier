@@ -1,0 +1,67 @@
+name: Build Courier DEBUG APK (DEV)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: build-debug-apk
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true
+  EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+
+jobs:
+  build-debug-apk:
+    name: Build Debug (DEV) APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Gradle Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: ${{ runner.os }}-gradle-debug-${{ hashFiles('android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      - name: Install dependencies
+        run: npm install
+      - name: Prebuild (generate android folder)
+        run: npx expo prebuild --no-install
+      - name: Raise Gradle memory (Metaspace) for KSP/expo-updates
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'android/gradle.properties';
+            let c = fs.readFileSync(p, 'utf8');
+            c = c.replace(
+              /org.gradle.jvmargs=.*/,
+              'org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1536m -XX:+HeapDumpOnOutOfMemoryError'
+            );
+            fs.writeFileSync(p, c);
+            console.log('gradle.properties memory raised');
+          "
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Build Debug APK (DEV build, __DEV__ enabled)
+        run: cd android && ./gradlew assembleDebug --no-daemon
+      - name: Upload Debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rumah-Keripik-Courier-Debug-APKs
+          path: android/app/build/outputs/apk/debug/app-*-debug.apk
+          if-no-files-found: error
+          retention-days: 30
