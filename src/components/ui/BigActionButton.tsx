@@ -11,6 +11,7 @@ interface BigActionButtonProps {
   variant?: 'primary' | 'success' | 'danger' | 'ghost' | 'outline';
   flex?: boolean;
   icon?: ComponentType<LucideProps>;
+  testID?: string;
 }
 
 export function BigActionButton({
@@ -20,6 +21,7 @@ export function BigActionButton({
   disabled = false,
   variant = 'primary',
   flex,
+  testID,
   icon: Icon,
 }: BigActionButtonProps) {
   const colors = useAppColors();
@@ -58,6 +60,7 @@ export function BigActionButton({
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.8}
+      testID={testID}
     >
       {loading ? (
         <ActivityIndicator size="small" color={textMap[variant]} />

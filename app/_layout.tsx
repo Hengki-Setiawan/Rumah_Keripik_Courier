@@ -14,6 +14,7 @@ import { installErrorLogging } from '../src/lib/logger';
 import { QueryProvider } from '../src/query/provider';
 import { useSyncStore } from '../src/store/sync-store';
 import { AuthProvider, useAuth } from '../src/lib/auth-guard';
+import { initDevRouter, tryNavigateAfterDevLogin } from '../src/lib/dev-router';
 
 initSentry();
 installErrorLogging();
@@ -79,6 +80,15 @@ function SyncProcessor() {
 
 function RootLayoutInner() {
   const { authState } = useAuth();
+  const { devSignIn } = useAuth();
+
+  useEffect(() => {
+    initDevRouter(devSignIn);
+    if (__DEV__) {
+      const t = setTimeout(() => tryNavigateAfterDevLogin(), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [devSignIn]);
 
   if (authState === 'loading') {
     return (

@@ -60,12 +60,12 @@ async function request<T>(
   return data as T;
 }
 
-export async function login(phone: string, pin: string) {
+export async function login(pin: string) {
   return request<{ token?: string; accessToken?: string; refreshToken?: string; courier: CourierDto }>(
     '/api/courier/auth/login',
     {
       method: 'POST',
-      body: JSON.stringify({ phone, pin }),
+      body: JSON.stringify({ pin }),
     },
     false
   );

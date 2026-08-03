@@ -92,3 +92,49 @@ Fix JS tanpa rebuild APK. App terhubung ke EAS project `hengki_setiawan/rumah-kr
 - `src/lib/logger.ts` — override console.* dengan tag `[RK_COURIER]`, `ErrorUtils.setGlobalHandler` → Sentry + SQLite buffer.
 - `src/lib/sqlite-db.ts` — tabel `app_logs` (buffer 500 baris), `saveLog`/`getRecentLogs`.
 - Verifikasi live: `adb logcat -s ReactNativeJS:* | grep RK_COURIER`.
+
+## Testing via USB (adb) — WAJIB BACA
+Device fisik Itel S666LN (Android 13), id `117131543G002849`. Pastikan terhubung: `adb devices` (harus `device`, bukan kosong).
+- **SCREENSHOT**: `adb shell screencap -p /sdcard/x.png` → `adb pull /sdcard/x.png <folder>` — taruh tiap halaman ke `../screenshot/<nama>.png` (atau `../ss/`). Beri nama sesuai bagian (contoh `02_dashboard.png`).
+- **BACA LAYAR**: `adb shell uiautomator dump /sdcard/ui.xml` → pull → grep `text="..."` bounds. JANGAN andalkan screenshot visual (AI text-only) — ui.xml adalah sumber kebenaran teks.
+- **NAVIGASI BOTTOM TAB** (layar 720x1612): tab bar di y≈1410. 4 segmen horizontal: Dashboard x≈120, Riwayat x≈360, Performa x≈540, Profil x≈690. Baris juga ada di y≈1430.
+- **Back button**: koordinat berubah per layar — cari node `Clickable` tekst di region atas (misal `Kembali` ~ [76,124][179,162]).
+
+### LOGIN - SISTEM BARU (PIN-only, single input) - 2026-08
+- Login sekarang **PIN saja**, TANPA kolom nomor HP (`app/(auth)/login.tsx`).
+- **Input PIN = SATU TextInput** (`testID="login-pin-input"`, `maxLength={6}`, `secureTextEntry`, `autoFocus`). Ketik: `adb shell input text 123456` LANGSUNG.
+- Tombol submit: `testID="login-submit-btn"` / teks `Masuk ke Dashboard`.
+- PIN kurir Budi = `123456`. API: `POST /api/courier/auth/login` body `{ pin }` (phone optional; backend cari kurir aktif by PIN hash).
+- Error lokal cek `text` `Koneksi internet` / `PIN 6-digit`.
+
+### TESTING VIA USB - JANGAN GUNAKAN KOORDINAT, GUNAKAN testID/resource-id
+Semua interaksi HARUS memakai `resource-id` (testID) via uiautomator, BUKAN koordinat yang rapuh.
+
+- **Dumping UI**: `adb shell uiautomator dump /sdcard/ui.xml` then `adb pull /sdcard/ui.xml <tmp>`. TestID muncul sbg `resource-id="..."`. Assert teks via `text="..."`.
+- Screenshot: `adb shell screencap -p /sdcard/x.png` -> pull ke `../screenshot/<nama>.png`.
+
+### PETA testID (resource-id) UTAMA
+| Screen | testID |
+|--------|--------|
+| Login PIN input | `login-pin-input` |
+| Login submit | `login-submit-btn` |
+| Tab Dashboard | `tab-index` |
+| Tab Riwayat | `tab-history` |
+| Tab Performa | `tab-stats` |
+| Tab Profil | `tab-profile` |
+Tambah `testID` baru bila screen lain belum ada (pola `screen-elemen`).
+
+### DEV DEEP-LINK (bypass login, HANYA __DEV__) - akses SEMUA halaman tanpa login
+File: `src/lib/dev-router.ts`. Di dev build, deep link `rumah-kripik-courier://dev/<route>` auto-login (devSignIn) + navigasi.
+**Perintah adb**:
+```
+adb shell am start -a android.intent.action.VIEW -d "rumah-kripik-courier://dev/dashboard"
+adb shell am start -a android.intent.action.VIEW -d "rumah-kripik-courier://dev/shift"
+adb shell am start -a android.intent.action.VIEW -d "rumah-kripik-courier://dev/earnings"
+adb shell am start -a android.intent.action.VIEW -d "rumah-kripik-courier://dev/sos"
+adb shell am start -a android.intent.action.VIEW -d "rumah-kripik-courier://dev/notifications"
+adb shell am start -a android.intent.action.VIEW -d "rumah-kripik-courier://dev/delivery/123"
+```
+- Alias: dashboard/home, history/riwayat, stats/performa, profile/profil, shift, earnings/pendapatan, sos, incidents, settings, lock, notifications, delivery/<id>.
+- **PENTING**: HANYA aktif `__DEV__`. Build release/prod tidak terpengaruh - deep link biasa tetap perlu login.
+- Integrasi: `app/_layout.tsx` initDevRouter(devSignIn) + tryNavigateAfterDevLogin; `devSignIn` di `src/lib/auth-guard.tsx`.
